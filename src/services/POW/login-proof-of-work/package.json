@@ -1,0 +1,53 @@
+{
+  "name": "@repobit/login-proof-of-work",
+  "version": "0.1.1",
+  "description": "Proof of work implementation for service access control",
+  "main": "index.js",
+  "scripts": {
+    "coverage": "nyc --all --reporter=html --reporter=text-lcov mocha --recursive --timeout 10000 test/unit",
+    "test": "mocha --recursive test/unit/",
+    "unit": "nyc --all --reporter=html mocha --recursive test/unit/ --exit",
+    "lint": "eslint --fix --ext .js ./index.js ./src/** ./test/unit/**"
+  },
+  "engines": {
+    "node": ">=14.18",
+    "npm": ">=6"
+  },
+  "repository": {
+    "type": "git",
+    "url": "ssh://git@bitbucket.bitdefender.biz:7999/login/login_proof_of_work.git"
+  },
+  "keywords": [
+    "proof",
+    "of",
+    "work",
+    "pow"
+  ],
+  "author": "aminciunescu@bitdefender.com",
+  "license": "ISC",
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@repobit/eslint-config-login-bitdefender": "^0.0.2",
+    "eslint": "^8.43.0",
+    "eslint-config-standard": "^17.0.0",
+    "eslint-plugin-import": "^2.27.5",
+    "eslint-plugin-n": "^15.6.1",
+    "eslint-plugin-promise": "^6.1.1",
+    "mocha": "^10.2.0",
+    "nyc": "^15.1.0",
+    "proxyquire": "^2.1.3",
+    "sinon": "^15.1.2"
+  },
+  "nyc": {
+    "exclude": [
+      "node_modules/**/*",
+      "test/**/*",
+      "coverage/**/*",
+      "src/errors.js",
+      ".eslintrc.js",
+      "index.js"
+    ]
+  }
+}

@@ -1,15 +1,15 @@
 {
-  "name": "elysia",
-  "version": "1.0.50",
+  "name": "my-app",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --hot src/index.ts"
   },
   "dependencies": {
-    "elysia": "latest"
+    "amqplib": "^0.10.5",
+    "dotenv": "^16.4.7",
+    "hono": "^4.6.16",
+    "mongoose": "^8.9.3"
   },
   "devDependencies": {
-    "bun-types": "latest"
-  },
-  "module": "src/index.js"
+    "@types/bun": "latest"
+  }
 }
