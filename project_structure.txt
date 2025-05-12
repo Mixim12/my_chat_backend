@@ -1,0 +1,64 @@
+.
+├── bun.lockb
+├── config.json
+├── Dockerfile
+├── eslint.config.mjs
+├── package.json
+├── project_structure.txt
+├── prometheus.yml
+├── README.md
+├── secrets
+│   ├── jwt
+│   │   ├── private.key
+│   │   └── public.pem
+│   └── pow
+│       ├── private.key
+│       └── public.pem
+├── src
+│   ├── controllers
+│   │   ├── authController.ts
+│   │   ├── channelController.ts
+│   │   ├── messageController.ts
+│   │   ├── powController.ts
+│   │   └── userController.ts
+│   ├── index.ts
+│   ├── middleware
+│   │   └── authMiddleware.ts
+│   ├── models
+│   │   ├── channelModel.ts
+│   │   ├── messageModel.ts
+│   │   ├── powModel.ts
+│   │   └── userModel.ts
+│   ├── routes
+│   │   ├── authRoutes.ts
+│   │   ├── channelRoutes.ts
+│   │   ├── messageRoutes.ts
+│   │   ├── powRoutes.ts
+│   │   └── userRoutes.ts
+│   ├── script.sh
+│   ├── services
+│   │   ├── proofOfWork
+│   │   │   ├── database
+│   │   │   │   └── mongoAdapter.ts
+│   │   │   ├── errors.ts
+│   │   │   ├── hash.ts
+│   │   │   ├── powTest.ts
+│   │   │   ├── proofOfWork.ts
+│   │   │   └── token.ts
+│   │   └── rabbitMQ
+│   │       ├── chatConsumer.ts
+│   │       ├── chatPublisher.ts
+│   │       └── rabbitmqService.ts
+│   ├── utils
+│   │   ├── config.ts
+│   │   ├── db.ts
+│   │   ├── dicoveryCode.ts
+│   │   ├── httpStatusCodes.ts
+│   │   └── jwt.ts
+│   └── websocket
+│       ├── socketServer.ts
+│       └── webSocketTest.ts
+├── start.txt
+└── tsconfig.json
+
+15 directories, 47 files

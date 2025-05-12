@@ -1,0 +1,20 @@
+export class E2EEError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = 'E2EEError';
+  }
+}
+
+export const ErrorCodes = {
+  SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
+  INVALID_MESSAGE: 'INVALID_MESSAGE',
+  NO_PRE_KEYS: 'NO_PRE_KEYS',
+  INVALID_KEY: 'INVALID_KEY',
+  MESSAGE_TOO_LARGE: 'MESSAGE_TOO_LARGE',
+  SESSION_EXPIRED: 'SESSION_EXPIRED',
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+} as const; 

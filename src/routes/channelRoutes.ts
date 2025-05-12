@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import { createChannel, getAllChannels } from "../controllers/channelController";
+import { createChannel } from "../controllers/channelController";
+import { authMiddleware } from "../middleware/authMiddleware";
 
 const channelRouter = new Hono();
 
-channelRouter.post("/", createChannel);
-channelRouter.get("/", getAllChannels);
+channelRouter.post("/create-channel", (c) => createChannel(c));
 
 export default channelRouter;

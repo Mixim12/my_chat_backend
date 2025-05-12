@@ -1,4 +1,24 @@
 {
-  "mongo": {},
-  "amqp": {}
+  "server": { "port": "${PORT}" },
+
+  "mongo": { "mongoURI": "${MONGO_URI}" },
+
+  "amqp": {
+    "rabbitURL": "amqp://mychat:mychatpass@localhost:5672",
+    "queueName": "${QUEUE_NAME}",
+    "exchangeName": "${EXCHANGE_NAME}",
+    "exchangeType": "${EXCHANGE_TYPE}"
+  },
+
+  "proofOfWork": {
+    "minDifficulty": 2,
+    "maxDifficulty": 4,
+    "difficultyStep": 2,
+    "minComplexity": 100,
+    "maxComplexity": 300,
+    "complexityStep": 25,
+    "difficultyResetPeriod": 86400000,
+    "difficultyDecreasePeriod": 3600000,
+    "challengeExpireAfter": 18000000000
+  }
 }

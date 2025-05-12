@@ -1,38 +1,25 @@
-import { Db } from "mongodb";
-
-let db: Db | null = null;
+import { powGenerated, powUsed, IPowGenerated, IPowUsed } from "../../../models/powModel";
+import { Schema } from "mongoose";
 
 const MongoAdapter = {
-  init(mongoClient: Db) {
-    db = mongoClient;
-
-    db.collection("pow_generated").createIndex({ userIdentifier: 1 });
-    db.collection("pow_generated").createIndex({ deleteOn: 1 }, { expireAfterSeconds: 1 });
-
-    db.collection("pow_used").createIndex({ challengeId: 1 });
-    db.collection("pow_used").createIndex({ deleteOn: 1 }, { expireAfterSeconds: 1 });
+  async getLastGeneratedByUserIdentifier(userIdentifier: string): Promise<IPowGenerated | null> {
+    return await powGenerated.findOne({ userIdentifier }).sort({ createdAt: -1 }).exec();
   },
 
-  async getLastGeneratedByUserIdentifier(userIdentifier: string): Promise<any> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-    const result = await db.collection("pow_generated").find({ userIdentifier }).sort({ _id: -1 }).limit(1).toArray();
-    return result[0];
+  async saveGenerated(data: IPowGenerated): Promise<void> {
+    const doc = new powGenerated(data);
+    await doc.save();
   },
 
-  async saveGenerated(data: any): Promise<any> {
-    if (!db) {
-      throw new Error("Database not initialized");
-    }
-    return await db.collection("pow_generated").insertOne(data);
+  async getUsed(_id: Schema.Types.ObjectId): Promise<IPowUsed | null> {
+    return await powUsed.findOne({ _id }).exec();
   },
-
-  async getChallenge(challengeId: string): Promise<any> {
-    if (!db) {
-      throw new Error("Database not initialized");
+  async markChallengeUsed(_id: Schema.Types.ObjectId): Promise<void> {
+    const doc = await powGenerated.findOne({ _id }).exec();
+    if (doc) {
+      await powUsed.create(doc);
+      await doc.deleteOne();
     }
-    return await db.collection("pow_used").findOne({ challengeId });
   },
 };
 

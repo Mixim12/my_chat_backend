@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import { getAllUsers, getUserById } from "../controllers/userController";
+import { getUserByDiscoveryCode } from "../controllers/userController";
 
 const userRouter = new Hono();
 
-userRouter.get("/", getAllUsers);
-userRouter.get("/:id", getUserById);
+userRouter.get("/");
+userRouter.get("/:id", getUserByDiscoveryCode);
 
 export default userRouter;
