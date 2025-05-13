@@ -82,7 +82,7 @@ export async function register(ctx: Context): Promise<Response> {
       discoveryCode,
     });
 
-    const token = signJwt({ username, email });
+    const token = signJwt({ userUUID: user.userUUID.toString() });
     if (!token) {
       return ctx.json({ status: "Token generation failed" }, HTTP_STATUS.SERVER_ERROR);
     }
@@ -108,7 +108,7 @@ export async function login(ctx: Context): Promise<Response> {
     const { username, password, challengeToken, nonces } = loginSchema.parse(body);
 
     const userIdentifier: string = ctx.req.header("User-Agent") + "|" + ctx.req.header("X-Real-IP") + "|" + ctx.req.header("X-Forwarded-For");
-
+    
     if (!(await validateProofOfWork(userIdentifier, challengeToken, nonces))) {
       return ctx.json({ error: "Proof of work failed" }, HTTP_STATUS.BAD_REQUEST);
     }
@@ -123,7 +123,7 @@ export async function login(ctx: Context): Promise<Response> {
       return ctx.json({ error: "Invalid credentials" }, HTTP_STATUS.UNAUTHORIZED);
     }
 
-    const token = signJwt({ userUUID: user.userUUID });
+    const token = signJwt({ userUUID: user.userUUID.toString() });
     if (!token) {
       return ctx.json({ status: "Token generation failed" }, HTTP_STATUS.SERVER_ERROR);
     }

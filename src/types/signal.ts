@@ -1,27 +1,45 @@
 import { Schema } from 'mongoose';
+import { SessionCipher } from 'libsignal-protocol-typescript';
 
-export interface KeyPairType {
-  pubKey: ArrayBuffer;
-  privKey: ArrayBuffer;
+export interface SerializedKeyPair {
+  pubKey: number[];
+  privKey: number[];
 }
+
+export interface KeyPairType extends SerializedKeyPair {}
 
 export interface PreKeyPairType {
   keyId: number;
-  keyPair: KeyPairType;
+  keyPair: SerializedKeyPair;
 }
 
-export interface SignedPreKeyPairType extends PreKeyPairType {
-  signature: ArrayBuffer;
+export interface SignedPreKeyPairType {
+  keyId: number;
+  keyPair: SerializedKeyPair;
+  signature: number[];
+}
+
+export interface PreKeyBundle {
+  identityKey: SerializedKeyPair;
+  signedPreKey: {
+    keyId: number;
+    publicKey: number[];
+    signature: number[];
+  };
+  preKey: {
+    keyId: number;
+    publicKey: number[];
+  };
 }
 
 export interface SessionStore {
-  session: any; // TODO: Replace with proper SessionCipher type when available
+  session: SessionCipher;
   lastUsed: Date;
   expiresAt: Date;
 }
 
 export interface E2EEMessage {
-  recipientId: Schema.Types.UUID;
+  recipientUUID: Schema.Types.UUID;
   message: string;
   timestamp?: number;
 } 

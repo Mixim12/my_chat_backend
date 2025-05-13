@@ -8,10 +8,6 @@ const QUEUE_NAME = "chatQueue";
 const ROUTING_PATTERN = "#";
 const RABBIT_URL = config.amqp.rabbitURL;
 
-// Debug log for RabbitMQ URL
-console.log("[RabbitMQ] config.amqp.rabbitURL:", config.amqp?.rabbitURL);
-console.log("[RabbitMQ] process.env.RABBIT_URL:", process.env.RABBIT_URL);
-console.log("[RabbitMQ] Using RABBIT_URL:", RABBIT_URL);
 
 export async function getAmqpChannel(): Promise<amqp.Channel> {
   if (channel) return channel;

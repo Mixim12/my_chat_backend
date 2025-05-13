@@ -16,7 +16,8 @@ export async function createChannel(ctx: Context) {
     return ctx.json({ status: "Not authenticated" }, 401);
   }
 
-  const payload = decodeJwt(token) as { userUUID: Schema.Types.UUID };
+  const payload = decodeJwt(token) as { userUUID: string };
+  const userUUID = new Schema.Types.UUID(payload.userUUID);
 
   if (type !== "group" && type !== "private") {
     return ctx.json({ error: "Type must be either 'group' or 'private'" }, 400);
@@ -26,7 +27,7 @@ export async function createChannel(ctx: Context) {
 
   const participantsDiscoveryCodes = body.participantsDiscoveryCodes;
   
-  participants.push(payload.userUUID);
+  participants.push(userUUID);
 
   participants.push(...(await Promise.all(participantsDiscoveryCodes.map(async (code: string) => await discoveryCodeToUUID(code)))));
 
@@ -37,7 +38,7 @@ export async function createChannel(ctx: Context) {
     const groupInfo = {
       groupName: groupName,
       groupDescription: groupDescription,
-      groupAdmins: [payload.userUUID],
+      groupAdmins: [userUUID],
     };
 
     if (!groupName || !groupDescription ) {

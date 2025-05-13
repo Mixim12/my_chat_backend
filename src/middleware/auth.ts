@@ -1,39 +1,33 @@
-import { Context, Next } from 'hono';
-import { jwt } from 'hono/jwt';
-import { Schema } from 'mongoose';
+import { Context } from 'hono';
 import { getCookie } from 'hono/cookie';
+import { Schema } from 'mongoose';
+import { E2EEError, ErrorCodes } from '../utils/errors';
+import { verifyJwt } from '../utils/jwt';
 
-interface JWTPayload {
-  userUUID: Schema.Types.UUID;
-}
-
-declare module 'hono' {
-  interface ContextVariableMap {
-    userUUID: Schema.Types.UUID;
-  }
-}
-
-const jwtMiddleware = jwt({
-  secret: process.env.JWT_SECRET || 'your-secret-key',
-});
-
-export const verifyToken = jwtMiddleware;
-
-export const authMiddleware = async (c: Context, next: Next) => {
+export const authMiddleware = async (ctx: Context, next: () => Promise<void>) => {
   try {
-    const token = getCookie(c, 'token');
+    const token = getCookie(ctx, 'token');
     if (!token) {
-      return c.json({ error: 'Authentication required' }, 401);
+      throw new E2EEError(
+        'Authentication required',
+        ErrorCodes.SESSION_NOT_FOUND
+      );
     }
 
-    await jwtMiddleware(c, next);
-    const payload = c.get('jwtPayload') as JWTPayload;
-    if (!payload || !payload.userUUID) {
-      return c.json({ error: 'Invalid token' }, 401);
+    const payload = verifyJwt(token);
+    if (!payload || typeof payload !== 'object' || !('userUUID' in payload)) {
+      throw new E2EEError(
+        'Invalid token',
+        ErrorCodes.SESSION_NOT_FOUND
+      );
     }
 
-    c.set('userUUID', payload.userUUID);
+    ctx.set('userUUID', new Schema.Types.UUID(payload.userUUID as string));
+    await next();
   } catch (error) {
-    return c.json({ error: 'Authentication failed' }, 401);
+    if (error instanceof E2EEError) {
+      return ctx.json({ error: error.message, code: error.code }, 401);
+    }
+    return ctx.json({ error: 'Internal Server Error' }, 500);
   }
 }; 

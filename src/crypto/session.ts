@@ -11,8 +11,8 @@ const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
 
 // # 3.1 Session Schema
 const sessionSchema = z.object({
-  userId: z.string(),
-  recipientId: z.string(),
+  userUUID: z.string(),
+  recipientUUID: z.string(),
   sessionData: z.string(),
 });
 
@@ -34,11 +34,11 @@ setInterval(cleanupExpiredSessions, CLEANUP_INTERVAL);
 
 // # 3.4 X3DH Handshake
 export const establishSession = async (
-  userId: Schema.Types.UUID,
-  recipientId: Schema.Types.UUID,
+  userUUID: Schema.Types.UUID,
+  recipientUUID: Schema.Types.UUID,
   identityKey: any // TODO: Replace with proper KeyPairType when available
 ): Promise<any> => {
-  const sessionKey = `${userId}-${recipientId}`;
+  const sessionKey = `${userUUID}-${recipientUUID}`;
   
   // Check if session exists and is valid
   const existingSession = sessionStore.get(sessionKey);
@@ -49,10 +49,10 @@ export const establishSession = async (
 
   try {
     // Get recipient's pre-key bundle
-    const preKeyBundle = await getPreKeyBundle(recipientId);
+    const preKeyBundle = await getPreKeyBundle(recipientUUID);
 
     // Create session builder
-    const address = new SignalProtocol.SignalProtocolAddress(recipientId.toString(), 1);
+    const address = new SignalProtocol.SignalProtocolAddress(recipientUUID.toString(), 1);
     const sessionBuilder = new SignalProtocol.SessionBuilder(identityKey, address);
     
     // Process pre-key bundle
@@ -81,10 +81,10 @@ export const establishSession = async (
 
 // # 3.5 Session Retrieval
 export const getSession = (
-  userId: Schema.Types.UUID,
-  recipientId: Schema.Types.UUID
+  userUUID: Schema.Types.UUID,
+  recipientUUID: Schema.Types.UUID
 ): any | undefined => {
-  const sessionKey = `${userId}-${recipientId}`;
+  const sessionKey = `${userUUID}-${recipientUUID}`;
   const store = sessionStore.get(sessionKey);
   
   if (!store) {
@@ -102,9 +102,9 @@ export const getSession = (
 
 // # 3.6 Session Cleanup
 export const cleanupSession = (
-  userId: Schema.Types.UUID,
-  recipientId: Schema.Types.UUID
+  userUUID: Schema.Types.UUID,
+  recipientUUID: Schema.Types.UUID
 ): void => {
-  const sessionKey = `${userId}-${recipientId}`;
+  const sessionKey = `${userUUID}-${recipientUUID}`;
   sessionStore.delete(sessionKey);
 }; 

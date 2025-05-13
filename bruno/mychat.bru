@@ -1,0 +1,197 @@
+meta {
+  name: MyChat API Tests
+  type: http
+  seq: 1
+}
+
+# Authentication Tests
+post: auth/register {
+  body: json {
+    "username": "testuser",
+    "password": "testpass123",
+    "email": "test@example.com"
+  }
+  auth: none
+  docs: Register a new user
+}
+
+post: auth/login {
+  body: json {
+    "username": "testuser",
+    "password": "testpass123"
+  }
+  auth: none
+  docs: Login user
+}
+
+# E2EE Tests
+post: e2ee/keys/generate {
+  body: json {
+    "userUUID": "{{userUUID}}"
+  }
+  auth: bearer {{token}}
+  docs: Generate E2EE keys
+  tests: {
+    "should generate valid keys": {
+      script: |
+        const response = res.body;
+        assert(response.identityKey, "Identity key should be present");
+        assert(response.signedPreKey, "Signed pre-key should be present");
+        assert(response.preKeys, "Pre-keys should be present");
+        assert(response.preKeys.length > 0, "Should generate at least one pre-key");
+        
+        // Store keys for later use
+        env.set("identityKey", JSON.stringify(response.identityKey));
+        env.set("signedPreKey", JSON.stringify(response.signedPreKey));
+        env.set("preKeys", JSON.stringify(response.preKeys));
+  }
+}
+
+post: e2ee/keys/upload {
+  body: json {
+    "userUUID": "{{userUUID}}",
+    "identityKey": {{identityKey}},
+    "signedPreKey": {{signedPreKey}},
+    "preKeys": {{preKeys}}
+  }
+  auth: bearer {{token}}
+  docs: Upload public keys
+  tests: {
+    "should upload keys successfully": {
+      script: |
+        assert(res.status === 200 || res.status === 201, "Should return success status");
+        const response = res.body;
+        assert(response.success, "Should indicate successful upload");
+  }
+}
+
+get: e2ee/keys/{{userUUID}} {
+  auth: bearer {{token}}
+  docs: Get user's pre-key bundle
+  tests: {
+    "should return pre-key bundle": {
+      script: |
+        assert(res.status === 200, "Should return success status");
+        const response = res.body;
+        assert(response.identityKey, "Should return identity key");
+        assert(response.signedPreKey, "Should return signed pre-key");
+        assert(response.preKeys, "Should return pre-keys");
+  }
+}
+
+post: e2ee/session {
+  body: json {
+    "userUUID": "{{userUUID}}",
+    "preKeyBundle": {{preKeyBundle}}
+  }
+  auth: bearer {{token}}
+  docs: Establish E2EE session
+}
+
+post: e2ee/encrypt {
+  body: json {
+    "userUUID": "{{userUUID}}",
+    "message": "Hello, this is a test message"
+  }
+  auth: bearer {{token}}
+  docs: Encrypt message
+  tests: {
+    "should encrypt message": {
+      script: |
+        assert(res.status === 200, "Should return success status");
+        const response = res.body;
+        assert(response.ciphertext, "Should return encrypted message");
+        env.set("encryptedMessage", response.ciphertext);
+  }
+}
+
+post: e2ee/decrypt {
+  body: json {
+    "userUUID": "{{userUUID}}",
+    "ciphertext": "{{encryptedMessage}}"
+  }
+  auth: bearer {{token}}
+  docs: Decrypt message
+  tests: {
+    "should decrypt message": {
+      script: |
+        assert(res.status === 200, "Should return success status");
+        const response = res.body;
+        assert(response.message, "Should return decrypted message");
+        assert(response.message === "Hello, this is a test message", "Should decrypt to original message");
+  }
+}
+
+# Channel Tests
+post: channels {
+  body: json {
+    "name": "Test Channel",
+    "participants": ["{{userUUID}}"]
+  }
+  auth: bearer {{token}}
+  docs: Create a new channel
+  tests: {
+    "should create channel": {
+      script: |
+        assert(res.status === 201, "Should return created status");
+        const response = res.body;
+        assert(response.channelId, "Should return channel ID");
+        env.set("channelId", response.channelId);
+  }
+}
+
+get: channels {
+  auth: bearer {{token}}
+  docs: List user's channels
+}
+
+# Message Tests
+post: message {
+  body: json {
+    "channelId": "{{channelId}}",
+    "ciphertext": "{{encryptedMessage}}"
+  }
+  auth: bearer {{token}}
+  docs: Send a message
+  tests: {
+    "should send message": {
+      script: |
+        assert(res.status === 201, "Should return created status");
+        const response = res.body;
+        assert(response.messageId, "Should return message ID");
+  }
+}
+
+get: message {
+  query: {
+    "channelId": "{{channelId}}"
+  }
+  auth: bearer {{token}}
+  docs: Get channel messages
+  tests: {
+    "should return messages": {
+      script: |
+        assert(res.status === 200, "Should return success status");
+        const response = res.body;
+        assert(Array.isArray(response.messages), "Should return array of messages");
+  }
+}
+
+# WebSocket Tests
+websocket: ws {
+  url: ws://localhost:3000
+  auth: bearer {{token}}
+  docs: WebSocket connection for real-time messages
+  events: {
+    "join": {
+      "channelId": "{{channelId}}"
+    },
+    "msg": {
+      "channelId": "{{channelId}}",
+      "ciphertext": "{{encryptedMessage}}"
+    },
+    "typing": {
+      "channelId": "{{channelId}}"
+    }
+  }
+} 

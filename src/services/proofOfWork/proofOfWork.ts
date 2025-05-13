@@ -74,7 +74,7 @@ async function generateChallenge(userIdentifier: string, source?: string): Promi
 
 async function checkSolution(userIdentifier: string, token: string, nonces: number[]): Promise<boolean> {
   const challengeData = decodeChallengeToken(token);
-  
+
   if (challengeData.userIdentifier !== userIdentifier) {
     
     throw new Error("User identifier does not match challenge");

@@ -28,8 +28,10 @@ interface AuthenticatedSocket extends Socket {
 }
 
 interface JwtPayload {
-  userId: string;
+  sub: string;  // This will be the userUUID
   username: string;
+  iat?: number;
+  exp?: number;
 }
 
 export async function initSocketServer(app: http.Server) {
@@ -74,19 +76,19 @@ export async function initSocketServer(app: http.Server) {
         return next(new Error("Authentication token required"));
       }
 
-      const payload = await verifyJwt(token) as JwtPayload;
+      const payload = await verifyJwt(token) as unknown as JwtPayload;
       if (!payload) {
         return next(new Error("Invalid token"));
       }
 
       socket.data.user = {
-        uuid: payload.userId,
+        uuid: payload.sub,
         username: payload.username
       };
 
       // Update user status to online
       await UserModel.findOneAndUpdate(
-        { userUUID: payload.userId as unknown as Schema.Types.UUID },
+        { userUUID: payload.sub as unknown as Schema.Types.UUID },
         { $set: { status: "online" } }
       );
 
@@ -99,14 +101,14 @@ export async function initSocketServer(app: http.Server) {
 
   // Connection handling
   io.on("connection", (socket: AuthenticatedSocket) => {
-    const userId = socket.data.user.uuid;
+    const userUUID = socket.data.user.uuid;
     console.log(`User connected: ${socket.data.user.username}`);
 
     // Handle disconnection
     socket.on("disconnect", async () => {
       try {
         await UserModel.findOneAndUpdate(
-          { userUUID: userId as unknown as Schema.Types.UUID },
+          { userUUID: userUUID as unknown as Schema.Types.UUID },
           { 
             $set: { 
               status: "offline",
@@ -130,7 +132,7 @@ export async function initSocketServer(app: http.Server) {
         }
 
         // Check if user is a participant
-        if (!channel.participants.includes(userId as unknown as Schema.Types.UUID)) {
+        if (!channel.participants.includes(userUUID as unknown as Schema.Types.UUID)) {
           socket.emit("error", "Not authorized to join this channel");
           return;
         }
@@ -140,7 +142,7 @@ export async function initSocketServer(app: http.Server) {
         
         // Notify others
         socket.to(channelId).emit("user_joined", {
-          userId,
+          userUUID,
           username: socket.data.user.username
         });
       } catch (error) {
@@ -153,7 +155,7 @@ export async function initSocketServer(app: http.Server) {
     socket.on("leave", (channelId: string) => {
       socket.leave(channelId);
       socket.to(channelId).emit("user_left", {
-        userId,
+        userUUID,
         username: socket.data.user.username
       });
     });
@@ -167,7 +169,7 @@ export async function initSocketServer(app: http.Server) {
         // Create message object
         const messageData = {
           messageUUID: uuidv4() as unknown as Schema.Types.UUID,
-          senderUUID: userId as unknown as Schema.Types.UUID,
+          senderUUID: userUUID as unknown as Schema.Types.UUID,
           channelId: new Schema.Types.ObjectId(validatedPayload.channelId),
           ciphertext: validatedPayload.ciphertext,
           createdAt: new Date()
@@ -193,7 +195,7 @@ export async function initSocketServer(app: http.Server) {
     // Handle typing indicator
     socket.on("typing", (channelId: string) => {
       socket.to(channelId).emit("user_typing", {
-        userId,
+        userUUID,
         username: socket.data.user.username
       });
     });
@@ -201,7 +203,7 @@ export async function initSocketServer(app: http.Server) {
     // Handle read receipts
     socket.on("read", (data: { channelId: string; messageId: string }) => {
       socket.to(data.channelId).emit("message_read", {
-        userId,
+        userUUID,
         messageId: data.messageId
       });
     });

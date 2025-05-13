@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { createMessage, getMessages } from "../controllers/messageController";
-import { authMiddleware } from "../middleware/authMiddleware";
+import { authMiddleware } from "../middleware/auth";
 
 const messageRouter = new Hono();
 

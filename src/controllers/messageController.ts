@@ -23,14 +23,16 @@ export const createMessage = async (ctx: Context) => {
       return ctx.json({ error: "Authentication required" }, 401);
     }
 
-    const payload = decodeJwt(token) as { userUUID: Schema.Types.UUID };
+    const payload = decodeJwt(token) as { userUUID: string };
     if (!payload) {
       return ctx.json({ error: "Invalid token" }, 401);
     }
 
+    const userUUID = new Schema.Types.UUID(payload.userUUID);
+
     const messageData = {
       messageUUID: uuidv4() as unknown as Schema.Types.UUID,
-      senderUUID: payload.userUUID,
+      senderUUID: userUUID,
       channelId: new Types.ObjectId(validatedData.channelId),
       ciphertext: validatedData.ciphertext,
       createdAt: new Date()
@@ -67,14 +69,16 @@ export const getMessages = async (ctx: Context) => {
       return ctx.json({ error: "Authentication required" }, 401);
     }
 
-    const payload = decodeJwt(token) as { userUUID: Schema.Types.UUID };
+    const payload = decodeJwt(token) as { userUUID: string };
     if (!payload) {
       return ctx.json({ error: "Invalid token" }, 401);
     }
 
+    const userUUID = new Schema.Types.UUID(payload.userUUID);
+
     // Verify user is a participant in the channel
     const channel = await ChannelModel.findById(channelId);
-    if (!channel || !channel.participants.includes(payload.userUUID)) {
+    if (!channel || !channel.participants.includes(userUUID)) {
       return ctx.json({ error: "Not authorized to access this channel" }, 403);
     }
 

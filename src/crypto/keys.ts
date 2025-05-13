@@ -1,16 +1,37 @@
-import { randomBytes } from 'crypto';
 import { KeyHelper } from 'libsignal-protocol-typescript';
-import { KeyPairType, PreKeyPairType, SignedPreKeyPairType } from '../types/signal';
+import { KeyPairType, PreKeyPairType, SignedPreKeyPairType, SerializedKeyPair } from '../types/signal';
 import { KeyModel } from '../models/keyModel';
 import { UserModel } from '../models/userModel';
 import { Schema } from 'mongoose';
 import { z } from 'zod';
 import { E2EEError, ErrorCodes } from '../utils/errors';
 
+// Helper function to serialize key pair
+const serializeKeyPair = (keyPair: any) => {
+  return {
+    pubKey: Array.from(new Uint8Array(keyPair.pubKey)),
+    privKey: Array.from(new Uint8Array(keyPair.privKey))
+  };
+};
+
+// Helper function to serialize signature
+const serializeSignature = (signature: ArrayBuffer) => {
+  return Array.from(new Uint8Array(signature));
+};
+
+// Helper function to deserialize key pair
+const deserializeKeyPair = (keyPair: SerializedKeyPair) => {
+  return {
+    pubKey: new Uint8Array(keyPair.pubKey).buffer,
+    privKey: new Uint8Array(keyPair.privKey).buffer
+  };
+};
+
 // # 2.1 Key Generation
 export const generateIdentityKeyPair = async (): Promise<KeyPairType> => {
   try {
-    return await KeyHelper.generateIdentityKeyPair();
+    const keyPair = await KeyHelper.generateIdentityKeyPair();
+    return serializeKeyPair(keyPair);
   } catch (error) {
     throw new E2EEError(
       'Failed to generate identity key pair',
@@ -26,7 +47,10 @@ export const generatePreKeys = async (count: number = 100): Promise<PreKeyPairTy
     const preKeys: PreKeyPairType[] = [];
     for (let i = 0; i < count; i++) {
       const preKey = await KeyHelper.generatePreKey(i);
-      preKeys.push(preKey);
+      preKeys.push({
+        keyId: preKey.keyId,
+        keyPair: serializeKeyPair(preKey.keyPair)
+      });
     }
     return preKeys;
   } catch (error) {
@@ -42,7 +66,13 @@ export const generatePreKeys = async (count: number = 100): Promise<PreKeyPairTy
 export const generateSignedPreKey = async (identityKey: KeyPairType): Promise<SignedPreKeyPairType> => {
   try {
     const keyId = Math.floor(Math.random() * 1000000);
-    return await KeyHelper.generateSignedPreKey(identityKey, keyId);
+    const deserializedKey = deserializeKeyPair(identityKey);
+    const signedPreKey = await KeyHelper.generateSignedPreKey(deserializedKey, keyId);
+    return {
+      keyId: signedPreKey.keyId,
+      keyPair: serializeKeyPair(signedPreKey.keyPair),
+      signature: serializeSignature(signedPreKey.signature)
+    };
   } catch (error) {
     throw new E2EEError(
       'Failed to generate signed pre-key',
@@ -54,27 +84,37 @@ export const generateSignedPreKey = async (identityKey: KeyPairType): Promise<Si
 
 // Schema for key upload
 const keyUploadSchema = z.object({
-  identityKey: z.string(),
+  identityKey: z.object({
+    pubKey: z.array(z.number()),
+    privKey: z.array(z.number())
+  }),
   signedPreKey: z.object({
     keyId: z.number(),
-    publicKey: z.string(),
-    signature: z.string(),
+    keyPair: z.object({
+      pubKey: z.array(z.number()),
+      privKey: z.array(z.number())
+    }),
+    signature: z.array(z.number())
   }),
   preKeys: z.array(z.object({
     keyId: z.number(),
-    publicKey: z.string(),
-  })),
+    keyPair: z.object({
+      pubKey: z.array(z.number()),
+      privKey: z.array(z.number())
+    })
+  }))
 });
 
 // # 2.4 Key Upload
-export const uploadKeys = async (userId: Schema.Types.UUID, keys: z.infer<typeof keyUploadSchema>) => {
+export const uploadKeys = async (userUUID: Schema.Types.UUID, keys: z.infer<typeof keyUploadSchema>) => {
   try {
     const validatedKeys = keyUploadSchema.parse(keys);
+    const uuidString = (userUUID as any).path;
     
     await KeyModel.findOneAndUpdate(
-      { userId },
+      { userUUID: uuidString },
       {
-        userId,
+        userUUID: uuidString,
         identityKey: validatedKeys.identityKey,
         signedPreKey: validatedKeys.signedPreKey,
         preKeys: validatedKeys.preKeys,
@@ -99,9 +139,13 @@ export const uploadKeys = async (userId: Schema.Types.UUID, keys: z.infer<typeof
 };
 
 // # 2.5 Key Retrieval
-export const getPreKeyBundle = async (userId: Schema.Types.UUID): Promise<any> => {
+export const getPreKeyBundle = async (userUUID: Schema.Types.UUID): Promise<any> => {
   try {
-    const user = await UserModel.findOne({ userUUID: userId });
+    // Extract the actual UUID string from the Schema.Types.UUID object
+    const uuidString = (userUUID as any).path;
+    
+    
+    const user = await UserModel.findOne({ userUUID: uuidString });
     if (!user) {
       throw new E2EEError(
         'User not found',
@@ -109,7 +153,7 @@ export const getPreKeyBundle = async (userId: Schema.Types.UUID): Promise<any> =
       );
     }
 
-    const keyBundle = await KeyModel.findOne({ userId });
+    const keyBundle = await KeyModel.findOne({ userUUID: uuidString });
     if (!keyBundle) {
       throw new E2EEError(
         'No keys found for user',
@@ -128,7 +172,7 @@ export const getPreKeyBundle = async (userId: Schema.Types.UUID): Promise<any> =
 
     // Remove the used pre-key
     await KeyModel.updateOne(
-      { userId },
+      { userUUID: uuidString },
       { $pull: { preKeys: { keyId: preKey.keyId } } }
     );
 
@@ -136,15 +180,16 @@ export const getPreKeyBundle = async (userId: Schema.Types.UUID): Promise<any> =
       identityKey: keyBundle.identityKey,
       signedPreKey: {
         keyId: keyBundle.signedPreKey.keyId,
-        publicKey: keyBundle.signedPreKey.publicKey,
+        publicKey: keyBundle.signedPreKey.keyPair.pubKey,
         signature: keyBundle.signedPreKey.signature,
       },
       preKey: {
         keyId: preKey.keyId,
-        publicKey: preKey.publicKey,
+        publicKey: preKey.keyPair.pubKey,
       },
     };
   } catch (error) {
+    console.error('PreKey bundle error details:', error);
     if (error instanceof E2EEError) {
       throw error;
     }

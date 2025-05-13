@@ -1,0 +1,23 @@
+[Unit]
+Description=Prometheus
+Documentation=https://prometheus.io/docs/introduction/overview/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=mixim
+Group=mixim
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=/usr/local/bin/prometheus \
+    --config.file=/home/mixim/Projects/myChat/my_chat_backend_CURSOR/prometheus.yml \
+    --storage.tsdb.path=/home/mixim/Projects/myChat/my_chat_backend_CURSOR/prometheus_data \
+    --web.console.templates=/usr/local/bin/consoles \
+    --web.console.libraries=/usr/local/bin/console_libraries \
+    --web.enable-lifecycle
+
+SyslogIdentifier=prometheus
+Restart=always
+
+[Install]
+WantedBy=multi-user.target 

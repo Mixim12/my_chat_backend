@@ -1,33 +1,43 @@
 import { Schema, model } from 'mongoose';
+import { SerializedKeyPair } from '../types/signal';
 
 interface IKey {
-  userId: Schema.Types.UUID;
-  identityKey: string;
+  userUUID: Schema.Types.UUID;
+  identityKey: SerializedKeyPair;
   signedPreKey: {
     keyId: number;
-    publicKey: string;
-    signature: string;
+    keyPair: SerializedKeyPair;
+    signature: number[];
   };
   preKeys: Array<{
     keyId: number;
-    publicKey: string;
+    keyPair: SerializedKeyPair;
   }>;
   lastUpdated: Date;
 }
 
 const keySchema = new Schema<IKey>({
-  userId: { type: Schema.Types.UUID, required: true, unique: true },
-  identityKey: { type: String, required: true },
+  userUUID: { type: Schema.Types.UUID, required: true, unique: true },
+  identityKey: {
+    pubKey: [Number],
+    privKey: [Number]
+  },
   signedPreKey: {
-    keyId: { type: Number, required: true },
-    publicKey: { type: String, required: true },
-    signature: { type: String, required: true },
+    keyId: Number,
+    keyPair: {
+      pubKey: [Number],
+      privKey: [Number]
+    },
+    signature: [Number]
   },
   preKeys: [{
-    keyId: { type: Number, required: true },
-    publicKey: { type: String, required: true },
+    keyId: Number,
+    keyPair: {
+      pubKey: [Number],
+      privKey: [Number]
+    }
   }],
-  lastUpdated: { type: Date, default: Date.now },
+  lastUpdated: { type: Date, default: Date.now }
 });
 
 export const KeyModel = model<IKey>('Key', keySchema); 

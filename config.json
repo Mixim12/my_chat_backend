@@ -1,10 +1,14 @@
 {
   "server": { "port": "${PORT}" },
 
+  "cors": {
+    "origins": "${CORS_ORIGINS}"
+  },
+
   "mongo": { "mongoURI": "${MONGO_URI}" },
 
   "amqp": {
-    "rabbitURL": "amqp://mychat:mychatpass@localhost:5672",
+    "rabbitURL": "${RABBIT_URL}",
     "queueName": "${QUEUE_NAME}",
     "exchangeName": "${EXCHANGE_NAME}",
     "exchangeType": "${EXCHANGE_TYPE}"
