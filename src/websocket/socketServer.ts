@@ -3,13 +3,13 @@ import { Server, ExtendedError, Socket } from "socket.io";
 import { sendMessage } from "../services/rabbitMQ/chatPublisher";
 import { getAmqpChannel, createExclusiveQueue } from "../services/rabbitMQ/rabbitmqService";
 import { verifyJwt } from "../utils/jwt";
-import { IMessage, MessageModel } from "../models/messageModel";
+import {  MessageModel } from "../models/messageModel";
 import { ChannelModel } from "../models/channelModel";
 import { UserModel } from "../models/userModel";
 import config from "../utils/config";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
-import { Schema } from "mongoose";
+import { Schema, Types } from "mongoose";
 import { Channel } from "amqplib";
 
 // Message validation schema
@@ -28,8 +28,7 @@ interface AuthenticatedSocket extends Socket {
 }
 
 interface JwtPayload {
-  sub: string;  // This will be the userUUID
-  username: string;
+  userUUID: string;  // This matches the actual JWT structure
   iat?: number;
   exp?: number;
 }
@@ -77,24 +76,32 @@ export async function initSocketServer(app: http.Server) {
       }
 
       const payload = await verifyJwt(token) as unknown as JwtPayload;
-      if (!payload) {
+      if (!payload || !payload.userUUID) {
         return next(new Error("Invalid token"));
       }
 
+      // Get user details from database
+      const user = await UserModel.findOne({ userUUID: new Types.UUID(payload.userUUID) })
+        .select('userUUID username');
+      
+      if (!user) {
+        return next(new Error("User not found"));
+      }
+
       socket.data.user = {
-        uuid: payload.sub,
-        username: payload.username
+        uuid: payload.userUUID,
+        username: user.username
       };
 
       // Update user status to online
       await UserModel.findOneAndUpdate(
-        { userUUID: payload.sub as unknown as Schema.Types.UUID },
+        { userUUID: new Types.UUID(payload.userUUID) },
         { $set: { status: "online" } }
       );
 
       next();
     } catch (err) {
-      console.error("Authentication error:", err);
+      console.error("Token verification error:", err);
       next(err as ExtendedError);
     }
   });
@@ -108,7 +115,7 @@ export async function initSocketServer(app: http.Server) {
     socket.on("disconnect", async () => {
       try {
         await UserModel.findOneAndUpdate(
-          { userUUID: userUUID as unknown as Schema.Types.UUID },
+          { userUUID: new Types.UUID(userUUID) },
           { 
             $set: { 
               status: "offline",
@@ -132,7 +139,7 @@ export async function initSocketServer(app: http.Server) {
         }
 
         // Check if user is a participant
-        if (!channel.participants.includes(userUUID as unknown as Schema.Types.UUID)) {
+        if (!channel.participants.includes(new Types.UUID(userUUID))) {
           socket.emit("error", "Not authorized to join this channel");
           return;
         }
@@ -168,8 +175,8 @@ export async function initSocketServer(app: http.Server) {
         
         // Create message object
         const messageData = {
-          messageUUID: uuidv4() as unknown as Schema.Types.UUID,
-          senderUUID: userUUID as unknown as Schema.Types.UUID,
+          messageUUID: new Types.UUID(uuidv4()),
+          senderUUID: new Types.UUID(userUUID),
           channelId: new Schema.Types.ObjectId(validatedPayload.channelId),
           ciphertext: validatedPayload.ciphertext,
           createdAt: new Date()

@@ -1,60 +1,84 @@
-import amqp from "amqplib";
+import * as amqplib from "amqplib";
 import config from "../../utils/config";
 
-let channel: amqp.Channel | null = null;
+let channel: amqplib.Channel | null = null;
+let connection: amqplib.Connection | null = null;
 const EXCHANGE_NAME = config.amqp.exchangeName;
 const EXCHANGE_TYPE = "topic";
 const QUEUE_NAME = "chatQueue";
 const ROUTING_PATTERN = "#";
 const RABBIT_URL = config.amqp.rabbitURL;
+const RECONNECT_INTERVAL = 5000; // 5 seconds
 
+async function setupChannel(conn: amqplib.Connection): Promise<amqplib.Channel> {
+  const ch = await (conn as any).createChannel();
+  
+  // Set up main exchange for chat messages
+  await ch.assertExchange(EXCHANGE_NAME, EXCHANGE_TYPE, { 
+    durable: true,
+    autoDelete: false
+  });
 
-export async function getAmqpChannel(): Promise<amqp.Channel> {
-  if (channel) return channel;
+  // Set up broadcast exchange for WebSocket messages
+  await ch.assertExchange("ws.broadcast", "fanout", { 
+    durable: false,
+    autoDelete: true
+  });
 
+  // Set up main queue for chat messages
+  await ch.assertQueue(QUEUE_NAME, {
+    durable: true,
+    autoDelete: false
+  });
+
+  // Bind main queue to exchange
+  await ch.bindQueue(QUEUE_NAME, EXCHANGE_NAME, ROUTING_PATTERN);
+
+  return ch;
+}
+
+async function connect(): Promise<void> {
   try {
-    const conn = await amqp.connect(RABBIT_URL, {
-      frameMax: 131072
-    });
-  channel = await conn.createChannel();
+    connection = (await amqplib.connect(RABBIT_URL, {
+      frameMax: 131072,
+      heartbeat: 60
+    }) as unknown) as amqplib.Connection;
 
-    // Set up main exchange for chat messages
-    await channel.assertExchange(EXCHANGE_NAME, EXCHANGE_TYPE, { 
-      durable: true,
-      autoDelete: false
-    });
+    if (!connection) {
+      throw new Error("Failed to establish RabbitMQ connection");
+    }
 
-    // Set up broadcast exchange for WebSocket messages
-    await channel.assertExchange("ws.broadcast", "fanout", { 
-      durable: false,
-      autoDelete: true
-    });
+    channel = await setupChannel(connection);
 
-    // Set up main queue for chat messages
-    await channel.assertQueue(QUEUE_NAME, {
-      durable: true,
-      autoDelete: false
-    });
-
-    // Bind main queue to exchange
-    await channel.bindQueue(QUEUE_NAME, EXCHANGE_NAME, ROUTING_PATTERN);
-
-    // Handle connection errors
-    conn.on("error", (err) => {
+    connection.on("error", async (err) => {
       console.error("RabbitMQ connection error:", err);
       channel = null;
+      connection = null;
+      setTimeout(connect, RECONNECT_INTERVAL);
     });
 
-    conn.on("close", () => {
+    connection.on("close", () => {
       console.log("RabbitMQ connection closed");
       channel = null;
+      connection = null;
+      setTimeout(connect, RECONNECT_INTERVAL);
     });
 
-  return channel;
   } catch (error) {
     console.error("Failed to establish RabbitMQ connection:", error);
+    setTimeout(connect, RECONNECT_INTERVAL);
     throw error;
   }
+}
+
+export async function getAmqpChannel(): Promise<amqplib.Channel> {
+  if (channel) return channel;
+
+  await connect();
+  if (!channel) {
+    throw new Error("Failed to establish RabbitMQ channel");
+  }
+  return channel;
 }
 
 export async function createExclusiveQueue(): Promise<string> {

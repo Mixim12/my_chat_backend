@@ -90,9 +90,7 @@ async function checkSolution(userIdentifier: string, token: string, nonces: numb
     throw new Error("Invalid PoW solution");
   }
 
-  if (MongoAdapter) {
-    await MongoAdapter.markChallengeUsed(challengeData._id);
-  }
+  
 
   return isValid;
 }

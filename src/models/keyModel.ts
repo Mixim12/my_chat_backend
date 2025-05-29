@@ -1,43 +1,81 @@
-import { Schema, model } from 'mongoose';
-import { SerializedKeyPair } from '../types/signal';
+import { Schema, model, Document, Types } from 'mongoose';
 
-interface IKey {
+export interface IIdentityKey extends Document {
   userUUID: Schema.Types.UUID;
-  identityKey: SerializedKeyPair;
-  signedPreKey: {
-    keyId: number;
-    keyPair: SerializedKeyPair;
-    signature: number[];
-  };
-  preKeys: Array<{
-    keyId: number;
-    keyPair: SerializedKeyPair;
-  }>;
-  lastUpdated: Date;
+  publicKey: Buffer;
+  privateKey: Buffer; // Encrypted at rest
+  registrationId: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-const keySchema = new Schema<IKey>({
-  userUUID: { type: Schema.Types.UUID, required: true, unique: true },
-  identityKey: {
-    pubKey: [Number],
-    privKey: [Number]
-  },
-  signedPreKey: {
-    keyId: Number,
-    keyPair: {
-      pubKey: [Number],
-      privKey: [Number]
-    },
-    signature: [Number]
-  },
-  preKeys: [{
-    keyId: Number,
-    keyPair: {
-      pubKey: [Number],
-      privKey: [Number]
-    }
-  }],
-  lastUpdated: { type: Date, default: Date.now }
-});
+export interface IPreKey extends Document {
+  userUUID: Schema.Types.UUID;
+  keyId: number;
+  publicKey: Buffer;
+  privateKey: Buffer; // Encrypted at rest
+  used: boolean;
+  createdAt: Date;
+  consumedAt?: Date;
+}
 
-export const KeyModel = model<IKey>('Key', keySchema); 
+export interface ISignedPreKey extends Document {
+  userUUID: Schema.Types.UUID;
+  keyId: number;
+  publicKey: Buffer;
+  privateKey: Buffer; // Encrypted at rest
+  signature: Buffer;
+  timestamp: number;
+  active: boolean;
+  createdAt: Date;
+  rotatedAt?: Date;
+}
+
+// Identity Key Schema
+const IdentityKeySchema = new Schema<IIdentityKey>({
+  userUUID: { type: Schema.Types.UUID, required: true, unique: true, index: true },
+  publicKey: { type: Buffer, required: true },
+  privateKey: { type: Buffer, required: true }, // Should be encrypted before storage
+  registrationId: { type: Number, required: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+// PreKey Schema
+const PreKeySchema = new Schema<IPreKey>({
+  userUUID: { type: Schema.Types.UUID, required: true, index: true },
+  keyId: { type: Number, required: true },
+  publicKey: { type: Buffer, required: true },
+  privateKey: { type: Buffer, required: true }, // Should be encrypted before storage
+  used: { type: Boolean, default: false, index: true },
+  createdAt: { type: Date, default: Date.now },
+  consumedAt: { type: Date }
+}, { timestamps: true });
+
+// Compound index for efficient lookup
+PreKeySchema.index({ userUUID: 1, keyId: 1 }, { unique: true });
+PreKeySchema.index({ userUUID: 1, used: 1 }); // For finding unused prekeys
+
+// Signed PreKey Schema
+const SignedPreKeySchema = new Schema<ISignedPreKey>({
+  userUUID: { type: Schema.Types.UUID, required: true, index: true },
+  keyId: { type: Number, required: true },
+  publicKey: { type: Buffer, required: true },
+  privateKey: { type: Buffer, required: true }, // Should be encrypted before storage
+  signature: { type: Buffer, required: true },
+  timestamp: { type: Number, required: true },
+  active: { type: Boolean, default: true, index: true },
+  createdAt: { type: Date, default: Date.now },
+  rotatedAt: { type: Date }
+}, { timestamps: true });
+
+// Compound index for efficient lookup
+SignedPreKeySchema.index({ userUUID: 1, keyId: 1 }, { unique: true });
+SignedPreKeySchema.index({ userUUID: 1, active: 1 });
+
+// TTL index to auto-delete old signed prekeys after 60 days
+SignedPreKeySchema.index({ rotatedAt: 1 }, { expireAfterSeconds: 60 * 24 * 60 * 60 });
+
+export const IdentityKeyModel = model<IIdentityKey>('IdentityKey', IdentityKeySchema);
+export const PreKeyModel = model<IPreKey>('PreKey', PreKeySchema);
+export const SignedPreKeyModel = model<ISignedPreKey>('SignedPreKey', SignedPreKeySchema);

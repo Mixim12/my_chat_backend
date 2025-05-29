@@ -1,8 +1,8 @@
 export class E2EEError extends Error {
   constructor(
     message: string,
-    public code: string,
-    public details?: unknown
+    public code: keyof typeof ErrorCodes,
+    public details?: any
   ) {
     super(message);
     this.name = 'E2EEError';
@@ -17,4 +17,10 @@ export const ErrorCodes = {
   MESSAGE_TOO_LARGE: 'MESSAGE_TOO_LARGE',
   SESSION_EXPIRED: 'SESSION_EXPIRED',
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+  KEY_DERIVATION_ERROR: 'KEY_DERIVATION_ERROR',
+  ENCRYPTION_ERROR: 'ENCRYPTION_ERROR',
+  DECRYPTION_ERROR: 'DECRYPTION_ERROR',
+  KEY_GENERATION_ERROR: 'KEY_GENERATION_ERROR',
+  KEY_UPLOAD_ERROR: 'KEY_UPLOAD_ERROR',
+  KEY_RETRIEVAL_ERROR: 'KEY_RETRIEVAL_ERROR'
 } as const; 

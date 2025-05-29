@@ -1,43 +1,21 @@
 import { Hono } from 'hono';
-import { Schema } from 'mongoose';
 import { authMiddleware } from '../middleware/auth';
-import { e2eeMiddleware } from '../middleware/e2ee';
-import * as SignalProtocol from 'libsignal-protocol-typescript';
-import {
-  generateKeys,
-  uploadUserKeys,
-  getPreKeyBundleForUser,
-  establishUserSession,
-  encryptUserMessage,
-  decryptUserMessage
-} from '../controllers/e2eeController';
+import { E2EEController } from '../controllers/e2eeController';
 
-// Extend Hono's types
-declare module 'hono' {
-  interface ContextVariableMap {
-    userUUID: Schema.Types.UUID;
-    session: SignalProtocol.SessionCipher;
-  }
-}
+const e2eeRouter = new Hono();
 
-const e2ee = new Hono();
+// All E2EE routes require authentication
+e2eeRouter.use('/*', authMiddleware);
 
-// # 5.1 Key Generation
-e2ee.post('/keys/generate', authMiddleware, generateKeys);
+// Key management
+e2eeRouter.post('/keys/init', E2EEController.initializeKeys);
+e2eeRouter.get('/keys/bundle/:userUUID', E2EEController.getPreKeyBundle);
+e2eeRouter.post('/keys/rotate-signed', E2EEController.rotateSignedPreKey);
+e2eeRouter.get('/keys/pool-status/:userUUID', E2EEController.getPreKeyPoolStatus);
+e2eeRouter.post('/keys/replenish', E2EEController.replenishPreKeys);
 
-// # 5.2 Key Upload
-e2ee.post('/keys/upload', authMiddleware, uploadUserKeys);
+// Session management
+e2eeRouter.post('/session/establish', E2EEController.establishSession);
+e2eeRouter.get('/session/status/:userUUID/:recipientUUID', E2EEController.getSessionStatus);
 
-// # 5.3 Pre-Key Bundle Retrieval
-e2ee.get('/keys/:userUUID', authMiddleware, getPreKeyBundleForUser);
-
-// # 5.4 Session Establishment
-e2ee.post('/session', authMiddleware, establishUserSession);
-
-// # 5.5 Message Encryption
-e2ee.post('/encrypt', authMiddleware, e2eeMiddleware, encryptUserMessage);
-
-// # 5.6 Message Decryption
-e2ee.post('/decrypt', authMiddleware, e2eeMiddleware, decryptUserMessage);
-
-export default e2ee; 
+export default e2eeRouter;

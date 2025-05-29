@@ -39,7 +39,7 @@ app.use("*", registerMetrics);
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);
 app.route("/api/channels", channelRouter);
-app.route("/api/message", messageRouter);
+app.route("/api/messages", messageRouter);
 app.route("/api/e2ee", e2eeRouter);
 app.route("/api/pow", powRouter);
 
@@ -79,7 +79,11 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
 
     // Handle compression
     const acceptEncoding = req.headers['accept-encoding'];
-    if (acceptEncoding?.includes('gzip')) {
+    // Do not send a body for OPTIONS requests or 204 responses
+    if (req.method === 'OPTIONS' || response.status === 204) {
+      res.writeHead(response.status, responseHeaders);
+      res.end();
+    } else if (acceptEncoding?.includes('gzip')) {
       responseHeaders['Content-Encoding'] = 'gzip';
       const gzip = createGzip();
       res.writeHead(response.status, responseHeaders);

@@ -1,14 +1,14 @@
-import { Schema, model, Document } from "mongoose";
+import { Schema, model, Document, Types } from "mongoose";
 
 
 export interface IChannel extends Document {
-
+  _id: Types.ObjectId;
   type: string;
-  participants: Schema.Types.UUID[];
+  participants: Types.UUID[];
   groupInfo?: {
     groupName: string;
     groupDescription: string;
-    groupAdmins: Schema.Types.UUID[];
+    groupAdmins: Types.UUID[];
   };
   createdAt: Date;
   updatedAt: Date;

@@ -1,4 +1,4 @@
-import { powGenerated, powUsed, IPowGenerated, IPowUsed } from "../../../models/powModel";
+import { powGenerated, IPowGenerated} from "../../../models/powModel";
 import { Schema } from "mongoose";
 
 const MongoAdapter = {
@@ -11,16 +11,8 @@ const MongoAdapter = {
     await doc.save();
   },
 
-  async getUsed(_id: Schema.Types.ObjectId): Promise<IPowUsed | null> {
-    return await powUsed.findOne({ _id }).exec();
-  },
-  async markChallengeUsed(_id: Schema.Types.ObjectId): Promise<void> {
-    const doc = await powGenerated.findOne({ _id }).exec();
-    if (doc) {
-      await powUsed.create(doc);
-      await doc.deleteOne();
-    }
-  },
+  
+  
 };
 
 export default MongoAdapter;

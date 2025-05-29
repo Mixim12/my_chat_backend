@@ -1,153 +1,237 @@
 import { Context } from 'hono';
-import { z } from 'zod';
-import { Schema } from 'mongoose';
-import { generateIdentityKeyPair, generatePreKeys, generateSignedPreKey, uploadKeys, getPreKeyBundle } from '../crypto/keys';
-import { establishSession } from '../crypto/session';
-import { encryptMessage, decryptMessage } from '../crypto/ratchet';
-import { E2EEError } from '../utils/errors';
+import { MessageEncryptionService } from '../services/signal/messageEncryption';
+import { SignalProtocolStore } from '../services/signal/signalProtocolStore';
+import { Types } from 'mongoose';
 
-// Schema for key upload
-const keyUploadSchema = z.object({
-  identityKey: z.object({
-    pubKey: z.array(z.number()),
-    privKey: z.array(z.number())
-  }),
-  signedPreKey: z.object({
-    keyId: z.number(),
-    keyPair: z.object({
-      pubKey: z.array(z.number()),
-      privKey: z.array(z.number())
-    }),
-    signature: z.array(z.number())
-  }),
-  preKeys: z.array(z.object({
-    keyId: z.number(),
-    keyPair: z.object({
-      pubKey: z.array(z.number()),
-      privKey: z.array(z.number())
-    })
-  }))
-});
+export class E2EEController {
+  /**
+   * Initialize Signal Protocol keys for a user
+   */
+  static async initializeKeys(ctx: Context): Promise<Response> {
+    try {
+      const body = await ctx.req.json();
+      const { userUUID } = body;
+      
+      if (!userUUID) {
+        return ctx.json({ error: 'userUUID is required' }, 400);
+      }
 
-// Schema for message
-const messageSchema = z.object({
-  recipientUUID: z.string().uuid(),
-  message: z.string(),
-  timestamp: z.number().optional(),
-});
+      // Initialize Signal Protocol keys
+      await MessageEncryptionService.initializeUser(userUUID);
 
-export const generateKeys = async (ctx: Context) => {
-  try {
-    const identityKey = await generateIdentityKeyPair();
-    const preKeys = await generatePreKeys();
-    const signedPreKey = await generateSignedPreKey(identityKey);
-
-    return ctx.json({
-      identityKey,
-      signedPreKey,
-      preKeys,
-    });
-  } catch (error) {
-    if (error instanceof E2EEError) {
-      return ctx.json({ error: error.message, code: error.code }, 400);
+      return ctx.json({ 
+        message: 'Signal Protocol keys initialized successfully',
+        userUUID 
+      }, 200);
+    } catch (error: any) {
+      console.error('Error initializing keys:', error);
+      return ctx.json({ 
+        error: 'Failed to initialize keys',
+        details: error.message 
+      }, 500);
     }
-    return ctx.json({ error: 'Internal Server Error' }, 500);
   }
-};
 
-export const uploadUserKeys = async (ctx: Context) => {
-  try {
-    const body = await ctx.req.json();
-    const validatedKeys = keyUploadSchema.parse(body);
-    const userUUID = body.userUUID;
-    
-    await uploadKeys(userUUID, validatedKeys);
-    return ctx.json({ message: 'Keys uploaded successfully' });
-  } catch (error) {
-    console.error('Upload error:', error);
-    if (error instanceof z.ZodError) {
-      return ctx.json({ error: 'Invalid key format', details: error.issues }, 400);
+  /**
+   * Get prekey bundle for a user
+   */
+  static async getPreKeyBundle(ctx: Context): Promise<Response> {
+    try {
+      const userUUID = ctx.req.param('userUUID');
+      
+      if (!userUUID) {
+        return ctx.json({ error: 'userUUID is required' }, 400);
+      }
+
+      const encryptionService = new MessageEncryptionService(userUUID);
+      const preKeyBundle = await encryptionService.createPreKeyBundle();
+
+      return ctx.json({ 
+        preKeyBundle: {
+          registrationId: preKeyBundle.registrationId,
+          identityKey: preKeyBundle.identityKey.toString('base64'),
+          signedPreKey: {
+            keyId: preKeyBundle.signedPreKey.keyId,
+            publicKey: preKeyBundle.signedPreKey.publicKey.toString('base64'),
+            signature: preKeyBundle.signedPreKey.signature.toString('base64')
+          },
+          preKey: preKeyBundle.preKey ? {
+            keyId: preKeyBundle.preKey.keyId,
+            publicKey: preKeyBundle.preKey.publicKey.toString('base64')
+          } : undefined
+        }
+      }, 200);
+    } catch (error: any) {
+      console.error('Error getting prekey bundle:', error);
+      return ctx.json({ 
+        error: 'Failed to get prekey bundle',
+        details: error.message 
+      }, 500);
     }
-    if (error instanceof E2EEError) {
-      return ctx.json({ error: error.message, code: error.code }, 400);
-    }
-    return ctx.json({ error: 'Internal Server Error' }, 500);
   }
-};
 
-export const getPreKeyBundleForUser = async (ctx: Context) => {
-  try {
-    const uuidParam = ctx.req.param('userUUID');
-   
-    
-    // Create UUID from string
-    const userUUID = new Schema.Types.UUID(uuidParam);
-    
-    
-    const preKeyBundle = await getPreKeyBundle(userUUID);
-    return ctx.json(preKeyBundle);
-  } catch (error) {
-    console.error('PreKey bundle error:', error);
-    if (error instanceof E2EEError) {
-      return ctx.json({ error: error.message, code: error.code }, 400);
+  /**
+   * Establish a session with another user
+   */
+  static async establishSession(ctx: Context): Promise<Response> {
+    try {
+      const body = await ctx.req.json();
+      const { userUUID, recipientUUID, preKeyBundle, deviceId = 1 } = body;
+      
+      if (!userUUID || !recipientUUID || !preKeyBundle) {
+        return ctx.json({ 
+          error: 'userUUID, recipientUUID, and preKeyBundle are required' 
+        }, 400);
+      }
+
+      // Convert base64 strings back to Buffers
+      const bundle = {
+        registrationId: preKeyBundle.registrationId,
+        identityKey: Buffer.from(preKeyBundle.identityKey, 'base64'),
+        signedPreKey: {
+          keyId: preKeyBundle.signedPreKey.keyId,
+          publicKey: Buffer.from(preKeyBundle.signedPreKey.publicKey, 'base64'),
+          signature: Buffer.from(preKeyBundle.signedPreKey.signature, 'base64')
+        },
+        preKey: preKeyBundle.preKey ? {
+          keyId: preKeyBundle.preKey.keyId,
+          publicKey: Buffer.from(preKeyBundle.preKey.publicKey, 'base64')
+        } : undefined
+      };
+
+      const encryptionService = new MessageEncryptionService(userUUID);
+      await encryptionService.establishSession(recipientUUID, bundle, deviceId);
+
+      return ctx.json({ 
+        message: 'Session established successfully',
+        userUUID,
+        recipientUUID,
+        deviceId
+      }, 200);
+    } catch (error: any) {
+      console.error('Error establishing session:', error);
+      return ctx.json({ 
+        error: 'Failed to establish session',
+        details: error.message 
+      }, 500);
     }
-    return ctx.json({ error: 'Internal Server Error' }, 500);
   }
-};
 
-export const establishUserSession = async (ctx: Context) => {
-  try {
-    const body = await ctx.req.json();
-    const { recipientUUID } = z.object({ recipientUUID: z.string().uuid() }).parse(body);
-    const userUUID = ctx.get('userUUID') as Schema.Types.UUID;
-    
-    const session = await establishSession(userUUID, new Schema.Types.UUID(recipientUUID), null);
-    return ctx.json({ message: 'Session established successfully' });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return ctx.json({ error: 'Invalid request format', details: error.issues }, 400);
+  /**
+   * Check session status
+   */
+  static async getSessionStatus(ctx: Context): Promise<Response> {
+    try {
+      const userUUID = ctx.req.param('userUUID');
+      const recipientUUID = ctx.req.param('recipientUUID');
+      const deviceId = ctx.req.query('deviceId') || '1';
+      
+      if (!userUUID || !recipientUUID) {
+        return ctx.json({ error: 'userUUID and recipientUUID are required' }, 400);
+      }
+
+      const encryptionService = new MessageEncryptionService(userUUID);
+      const hasSession = await encryptionService.hasSession(recipientUUID, Number(deviceId));
+      const sessionInfo = await encryptionService.getSessionInfo(recipientUUID, Number(deviceId));
+
+      return ctx.json({ 
+        hasSession,
+        sessionInfo: sessionInfo ? {
+          sessionId: sessionInfo.sessionId,
+          status: sessionInfo.status,
+          lastActivityAt: sessionInfo.lastActivityAt,
+          messageCount: sessionInfo.messageCount
+        } : null
+      }, 200);
+    } catch (error: any) {
+      console.error('Error getting session status:', error);
+      return ctx.json({ 
+        error: 'Failed to get session status',
+        details: error.message 
+      }, 500);
     }
-    if (error instanceof E2EEError) {
-      return ctx.json({ error: error.message, code: error.code }, 400);
-    }
-    return ctx.json({ error: 'Internal Server Error' }, 500);
   }
-};
 
-export const encryptUserMessage = async (ctx: Context) => {
-  try {
-    const body = await ctx.req.json();
-    const validatedMessage = messageSchema.parse(body);
-    const session = ctx.get('session');
+  /**
+   * Rotate signed prekey
+   */
+  static async rotateSignedPreKey(ctx: Context): Promise<Response> {
+    try {
+      const body = await ctx.req.json();
+      const { userUUID } = body;
+      
+      if (!userUUID) {
+        return ctx.json({ error: 'userUUID is required' }, 400);
+      }
 
-    const ciphertext = await encryptMessage(session, validatedMessage.message);
-    return ctx.json({ ciphertext });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return ctx.json({ error: 'Invalid message format', details: error.issues }, 400);
+      const encryptionService = new MessageEncryptionService(userUUID);
+      await encryptionService.rotateSignedPreKey();
+
+      return ctx.json({ 
+        message: 'Signed prekey rotated successfully',
+        userUUID 
+      }, 200);
+    } catch (error: any) {
+      console.error('Error rotating signed prekey:', error);
+      return ctx.json({ 
+        error: 'Failed to rotate signed prekey',
+        details: error.message 
+      }, 500);
     }
-    if (error instanceof E2EEError) {
-      return ctx.json({ error: error.message, code: error.code }, 400);
-    }
-    return ctx.json({ error: 'Internal Server Error' }, 500);
   }
-};
 
-export const decryptUserMessage = async (ctx: Context) => {
-  try {
-    const body = await ctx.req.json();
-    const { ciphertext } = z.object({ ciphertext: z.string() }).parse(body);
-    const session = ctx.get('session');
+  /**
+   * Get prekey pool status
+   */
+  static async getPreKeyPoolStatus(ctx: Context): Promise<Response> {
+    try {
+      const userUUID = ctx.req.param('userUUID');
+      
+      if (!userUUID) {
+        return ctx.json({ error: 'userUUID is required' }, 400);
+      }
 
-    const plaintext = await decryptMessage(session, ciphertext);
-    return ctx.json({ plaintext });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return ctx.json({ error: 'Invalid message format', details: error.issues }, 400);
+      const store = new SignalProtocolStore(userUUID);
+      const unusedCount = await store.getUnusedPreKeyCount();
+
+      return ctx.json({ 
+        unusedPreKeyCount: unusedCount,
+        needsReplenishment: unusedCount < 10
+      }, 200);
+    } catch (error: any) {
+      console.error('Error getting prekey pool status:', error);
+      return ctx.json({ 
+        error: 'Failed to get prekey pool status',
+        details: error.message 
+      }, 500);
     }
-    if (error instanceof E2EEError) {
-      return ctx.json({ error: error.message, code: error.code }, 400);
-    }
-    return ctx.json({ error: 'Internal Server Error' }, 500);
   }
-}; 
+
+  /**
+   * Replenish prekey pool
+   */
+  static async replenishPreKeys(ctx: Context): Promise<Response> {
+    try {
+      const body = await ctx.req.json();
+      const { userUUID } = body;
+      
+      if (!userUUID) {
+        return ctx.json({ error: 'userUUID is required' }, 400);
+      }
+
+      const encryptionService = new MessageEncryptionService(userUUID);
+      await encryptionService.replenishPreKeys();
+
+      return ctx.json({ 
+        message: 'Prekey pool replenished successfully',
+        userUUID 
+      }, 200);
+    } catch (error: any) {
+      console.error('Error replenishing prekeys:', error);
+      return ctx.json({ 
+        error: 'Failed to replenish prekeys',
+        details: error.message 
+      }, 500);
+    }
+  }
+}
