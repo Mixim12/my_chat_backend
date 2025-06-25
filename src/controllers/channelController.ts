@@ -6,7 +6,7 @@ import { decodeJwt } from "../utils/jwt";
 import { Schema, Types } from "mongoose";
 import { z } from "zod";
 import { UserModel } from "../models/userModel";
-import { getTokenFromRequest } from "../utils/auth";
+import { getCookie } from "hono/cookie";
 
 // Validation schemas
 const createChannelSchema = z.object({
@@ -28,7 +28,7 @@ export async function createChannel(ctx: Context) {
     const body = await ctx.req.json();
     const validatedData = createChannelSchema.parse(body);
 
-    const token = getTokenFromRequest(ctx);
+    const token = getCookie(ctx, "token");
     if (!token) {
       return ctx.json({ error: "Not authenticated" }, 401);
     }
@@ -141,7 +141,7 @@ export async function createChannel(ctx: Context) {
 
 export async function getChannels(ctx: Context) {
   try {
-    const token = getTokenFromRequest(ctx);
+    const token = getCookie(ctx, "token");
     if (!token) {
       return ctx.json({ error: "Not authenticated" }, 401);
     }
@@ -233,7 +233,7 @@ export async function getChannelById(ctx: Context) {
       return ctx.json({ error: "Channel ID is required" }, 400);
     }
 
-    const token = getTokenFromRequest(ctx);
+    const token = getCookie(ctx, "token");
     if (!token) {
       return ctx.json({ error: "Not authenticated" }, 401);
     }
@@ -274,65 +274,6 @@ export async function getChannelById(ctx: Context) {
   }
 }
 
-export async function updateChannel(ctx: Context) {
-  try {
-    const channelId = ctx.req.param("channelId");
-    if (!channelId) {
-      return ctx.json({ error: "Channel ID is required" }, 400);
-    }
-
-    const body = await ctx.req.json();
-    const validatedData = updateChannelSchema.parse(body);
-
-    const token = getTokenFromRequest(ctx);
-    if (!token) {
-      return ctx.json({ error: "Not authenticated" }, 401);
-    }
-
-    const payload = decodeJwt(token) as { userUUID: string };
-    const userUUID = new Types.UUID(payload.userUUID);
-
-    const channel = await ChannelModel.findOne({
-      _id: channelId,
-      participants: userUUID as unknown as Schema.Types.UUID
-    });
-
-    if (!channel) {
-      return ctx.json({ error: "Channel not found or access denied" }, 404);
-    }
-
-    // Only allow updates to group channels
-    if (channel.type !== "group") {
-      return ctx.json({ error: "Only group channels can be updated" }, 400);
-    }
-
-    // Check if user is admin (convert to string for comparison)
-    const userUUIDString = userUUID.toString();
-    const isAdmin = channel.groupInfo?.groupAdmins.some(admin => admin.toString() === userUUIDString);
-    
-    if (!isAdmin) {
-      return ctx.json({ error: "Only admins can update the channel" }, 403);
-    }
-
-    // Update channel
-    if (validatedData.groupName && channel.groupInfo) {
-      channel.groupInfo.groupName = validatedData.groupName;
-    }
-    if (validatedData.groupDescription && channel.groupInfo) {
-      channel.groupInfo.groupDescription = validatedData.groupDescription;
-    }
-
-    await channel.save();
-
-    return ctx.json({ message: "Channel updated successfully", channel });
-  } catch (error) {
-    console.error("Error updating channel:", error);
-    if (error instanceof z.ZodError) {
-      return ctx.json({ error: "Invalid request data", details: error.issues }, 400);
-    }
-    return ctx.json({ error: "Internal server error" }, 500);
-  }
-}
 
 export async function deleteChannel(ctx: Context) {
   try {
@@ -341,7 +282,7 @@ export async function deleteChannel(ctx: Context) {
       return ctx.json({ error: "Channel ID is required" }, 400);
     }
 
-    const token = getTokenFromRequest(ctx);
+    const token = getCookie(ctx, "token");
     if (!token) {
       return ctx.json({ error: "Not authenticated" }, 401);
     }

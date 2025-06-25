@@ -13,9 +13,12 @@ rule_files:
   # - "second_rules.yml"
 
 scrape_configs:
-  - job_name: "prometheus"
+  - job_name: "rabbitmq"
+    metrics_path: /metrics
     static_configs:
-      - targets: ["localhost:9090"]
+      - targets: ["localhost:15692"]
+    scrape_interval: 15s
+    scrape_timeout: 4s
 
   - job_name: "mychat-webapp"
     metrics_path: /api/metrics

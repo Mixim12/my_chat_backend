@@ -6,6 +6,8 @@ export interface IUser extends Document {
   email: string;
   userUUID: Schema.Types.UUID;
   discoveryCode: string;
+  status: "online" | "offline";
+  lastSeen: Date;
 }
 
 const UserSchema = new Schema<IUser>(
@@ -15,6 +17,8 @@ const UserSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true },
     userUUID: { type: Schema.Types.UUID, required: true, unique: true },
     discoveryCode: { type: String, required: true, unique: true },
+    status: { type: String, enum: ["online", "offline"], default: "offline" },
+    lastSeen: { type: Date, default: Date.now }
   },
   { timestamps: true }
 );

@@ -2,7 +2,7 @@ import { Context } from "hono";
 import { UserModel } from "../models/userModel";
 import { ChannelModel } from "../models/channelModel";
 import { decodeJwt } from "../utils/jwt";
-import { getTokenFromRequest } from "../utils/auth";
+import { getCookie } from "hono/cookie";
 import { Types } from "mongoose";
 import { z } from "zod";
 
@@ -52,7 +52,7 @@ export async function getUserByDiscoveryCode(ctx: Context) {
 
 export async function getCurrentUser(ctx: Context) {
   try {
-    const token = await getTokenFromRequest(ctx);
+    const token = getCookie(ctx, "token");
     if (!token) {
       return ctx.json({ error: "Not authenticated" }, 401);
     }
@@ -74,30 +74,11 @@ export async function getCurrentUser(ctx: Context) {
   }
 }
 
-export async function getUserProfile(ctx: Context) {
-  try {
-    const userUUID = ctx.req.param("userUUID");
-    if (!userUUID) {
-      return ctx.json({ error: "User UUID is required" }, 400);
-    }
 
-    const user = await UserModel.findOne({ userUUID: new Types.UUID(userUUID) })
-      .select('userUUID username discoveryCode status lastSeen createdAt');
-
-    if (!user) {
-      return ctx.json({ error: "User not found" }, 404);
-    }
-
-    return ctx.json({ user });
-  } catch (error) {
-    console.error("Error getting user profile:", error);
-    return ctx.json({ error: "Internal server error" }, 500);
-  }
-}
 
 export async function updateUser(ctx: Context) {
   try {
-    const token = await getTokenFromRequest(ctx);
+    const token = getCookie(ctx, "token");
     if (!token) {
       return ctx.json({ error: "Not authenticated" }, 401);
     }
@@ -167,7 +148,7 @@ export async function searchUsers(ctx: Context) {
       return ctx.json({ error: "Search query must be at least 2 characters" }, 400);
     }
 
-    const token = await getTokenFromRequest(ctx);
+    const token = getCookie(ctx, "token");
     if (!token) {
       return ctx.json({ error: "Not authenticated" }, 401);
     }

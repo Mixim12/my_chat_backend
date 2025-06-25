@@ -9,10 +9,20 @@ import type { CookieOptions } from "hono/utils/cookie";
 import { v4 as uuidv4 } from "uuid";
 import { generateDiscoveryCode } from "../utils/dicoveryCode";
 import { HTTP_STATUS } from "../utils/httpStatusCodes";
+import  getJwtGenerator  from "../services/virgil/e3kitService";
+import { Jwt } from "virgil-sdk";
+
 const cookieOptions: CookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "strict",
+  maxAge: 24 * 60 * 60, // 1 day - single token approach
+};
+
+const cookieOptionsVirgil: CookieOptions = {
+  httpOnly: false,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
   maxAge: 24 * 60 * 60, // 1 day - single token approach
 };
 
@@ -60,6 +70,18 @@ function generateToken(userUUID: string): string | null {
   return signJwt({ userUUID }, "24h"); // Single token with 24h expiry
 }
 
+async function generateVirgilToken(userUUID: string): Promise<Jwt> {
+  try{
+    const jwtGenerator = await getJwtGenerator();
+    const token = await jwtGenerator.generateToken(userUUID);
+    return token;
+  }catch(error){
+    console.error("Error generating Virgil token:", error);
+    throw error;
+  }
+}
+
+
 export async function register(ctx: Context): Promise<Response> {
   try {
     const body = await ctx.req.json();
@@ -88,7 +110,6 @@ export async function register(ctx: Context): Promise<Response> {
       userUUID: uuidv4(),
       discoveryCode,
     });
-
     const accessToken = generateToken(user.userUUID.toString());
     
     if (!accessToken) {
@@ -97,24 +118,28 @@ export async function register(ctx: Context): Promise<Response> {
 
     setAuthToken(ctx, accessToken);
 
+    const virgilToken = await generateVirgilToken(user.userUUID.toString());
+    if (!virgilToken) {
+      return ctx.json({ status: "Virgil token generation failed" }, HTTP_STATUS.SERVER_ERROR);
+    }
+    
+
     return ctx.json(
       {
         success: true,
         status: "Registered successfully",
-        user: {
-          id: (user._id as any).toString(),
-          username: user.username,
-          email: user.email,
-          userUUID: user.userUUID.toString(),
-          discoveryCode: user.discoveryCode
+        data: { username: user.username, 
+          email: user.email, 
+          userUUID: user.userUUID.toString(), 
+          discoveryCode: user.discoveryCode,
+          virgilToken: virgilToken.toString()
         },
-        token: accessToken,
-        data: { username: user.username, email: user.email },
       },
       HTTP_STATUS.CREATED
     );
   } catch (error: unknown) {
-    return handleError(ctx, error);
+    console.error("Error registering user:", error);
+    return ctx.json({ error: "Registration failed" }, HTTP_STATUS.SERVER_ERROR);
   }
 }
 
@@ -147,19 +172,22 @@ export async function login(ctx: Context): Promise<Response> {
 
     setAuthToken(ctx, accessToken);
 
+    const virgilToken = await generateVirgilToken(user.userUUID.toString());
+    if (!virgilToken) {
+      return ctx.json({ status: "Virgil token generation failed" }, HTTP_STATUS.SERVER_ERROR);
+    }
+   
+
     return ctx.json(
       {
         success: true,
         status: "Login successful",
-        user: {
-          id: (user._id as any).toString(),
-          username: user.username,
+        data: { username: user.username, 
           email: user.email,
           userUUID: user.userUUID.toString(),
-          discoveryCode: user.discoveryCode
+          discoveryCode: user.discoveryCode,
+          virgilToken: virgilToken.toString()
         },
-        token: accessToken,
-        data: { username: user.username, email: user.email },
       },
       HTTP_STATUS.OK
     );
@@ -168,67 +196,12 @@ export async function login(ctx: Context): Promise<Response> {
   }
 }
 
-// Refresh token functionality removed - using single token approach
-
-export async function revokeToken(ctx: Context): Promise<Response> {
-  try {
-    // Clear the single token cookie
-    clearAuthToken(ctx);
-    return ctx.json({ success: true, message: "Token revoked successfully" }, HTTP_STATUS.OK);
-  } catch (error: unknown) {
-    return handleError(ctx, error);
-  }
-}
-
-export async function verifyAuth(ctx: Context): Promise<Response> {
-  try {
-    const token = getCookie(ctx, "token");
-    
-    if (!token) {
-      return ctx.json({ 
-        isAuthenticated: false, 
-        error: "No token provided" 
-      }, HTTP_STATUS.UNAUTHORIZED);
-    }
-
-    const decoded = verifyJwt(token);
-    if (!decoded) {
-      clearAuthToken(ctx);
-      return ctx.json({ 
-        isAuthenticated: false, 
-        error: "Invalid or expired token" 
-      }, HTTP_STATUS.UNAUTHORIZED);
-    }
-
-    // Verify user still exists
-    const user = await UserModel.findOne({ userUUID: decoded.userUUID });
-    if (!user) {
-      clearAuthToken(ctx);
-      return ctx.json({ 
-        isAuthenticated: false, 
-        error: "User not found" 
-      }, HTTP_STATUS.UNAUTHORIZED);
-    }
-
-    return ctx.json({
-      isAuthenticated: true,
-      user: {
-        id: (user._id as any).toString(),
-        username: user.username,
-        email: user.email,
-        userUUID: user.userUUID.toString(),
-        discoveryCode: user.discoveryCode
-      }
-    }, HTTP_STATUS.OK);
-  } catch (error: unknown) {
-    return handleError(ctx, error);
-  }
-}
-
 export async function logout(ctx: Context): Promise<Response> {
   try {
+    // Clear authentication token
     clearAuthToken(ctx);
-    return ctx.json({ success: true, message: "Logged out successfully" }, HTTP_STATUS.OK);
+    
+    return ctx.json({ success: true, status: "Logged out successfully" }, HTTP_STATUS.OK);
   } catch (error: unknown) {
     return handleError(ctx, error);
   }

@@ -1,15 +1,12 @@
 import { Hono } from "hono";
-import { register, login, logout, revokeToken, verifyAuth } from "../controllers/authController";
+import { register, login, logout } from "../controllers/authController";
+import { authMiddleware } from "../middleware/auth";
 
 const authRouter = new Hono();
 
 // Public routes
-authRouter.post("/register", (c) => register(c));
-authRouter.post("/login", (c) => login(c));
-
-// Token management routes
-authRouter.post("/revoke-token", (c) => revokeToken(c));
-authRouter.get("/verify", (c) => verifyAuth(c));
-authRouter.post("/logout", (c) => logout(c));
+authRouter.post("/v1/auth/register",authMiddleware, register);
+authRouter.post("/v1/auth/login", authMiddleware, login);
+authRouter.post("/v1/auth/logout", logout);
 
 export default authRouter;

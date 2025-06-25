@@ -3,6 +3,6 @@ import { getChallenge } from "../controllers/powController";
 
 const powRouter = new Hono();
 
-powRouter.get("/get-challenge", (c) => getChallenge(c));
+powRouter.get("/v1/pow/get-challenge", getChallenge);
 
 export default powRouter;

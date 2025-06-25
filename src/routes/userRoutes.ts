@@ -1,22 +1,20 @@
 import { Hono } from "hono";
-import { getUserByDiscoveryCode, getCurrentUser, updateUser, searchUsers, getUserProfile } from "../controllers/userController";
+import { getUserByDiscoveryCode, getCurrentUser, updateUser, searchUsers } from "../controllers/userController";
 import { authMiddleware } from "../middleware/auth";
 
 const userRouter = new Hono();
 
 // Get current user profile
-userRouter.get("/me", authMiddleware, getCurrentUser);
+userRouter.get("/v1/users/me", authMiddleware, getCurrentUser);
 
 // Get user by discovery code
-userRouter.get("/discovery/:discoveryCode", authMiddleware, getUserByDiscoveryCode);
+userRouter.get("/v1/users/discovery/:discoveryCode", authMiddleware, getUserByDiscoveryCode);
 
-// Get user profile by UUID
-userRouter.get("/:userUUID", authMiddleware, getUserProfile);
 
 // Update current user profile
-userRouter.put("/me", authMiddleware, updateUser);
+userRouter.put("/v1/users/me", authMiddleware, updateUser);
 
 // Search users
-userRouter.get("/search/:query", authMiddleware, searchUsers);
+userRouter.get("/v1/users/search/:query", authMiddleware, searchUsers);
 
 export default userRouter;

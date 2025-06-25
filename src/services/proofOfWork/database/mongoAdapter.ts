@@ -1,5 +1,4 @@
 import { powGenerated, IPowGenerated} from "../../../models/powModel";
-import { Schema } from "mongoose";
 
 const MongoAdapter = {
   async getLastGeneratedByUserIdentifier(userIdentifier: string): Promise<IPowGenerated | null> {
@@ -10,9 +9,6 @@ const MongoAdapter = {
     const doc = new powGenerated(data);
     await doc.save();
   },
-
-  
-  
 };
 
 export default MongoAdapter;

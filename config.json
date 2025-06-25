@@ -24,5 +24,11 @@
     "difficultyResetPeriod": 86400000,
     "difficultyDecreasePeriod": 3600000,
     "challengeExpireAfter": 18000000000
+  },
+
+  "virgil": {
+    "APP_ID": "${VIRGIL_APP_ID}",
+    "APP_KEY_ID": "${VIRGIL_APP_KEY_ID}",
+    "APP_KEY": "${VIRGIL_APP_KEY}"
   }
 }
