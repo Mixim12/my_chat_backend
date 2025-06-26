@@ -5,6 +5,7 @@ export interface IChannel extends Document {
   _id: Types.ObjectId;
   type: string;
   participants: Types.UUID[];
+  status: string;
   groupInfo?: {
     groupName: string;
     groupDescription: string;
@@ -19,6 +20,7 @@ const ChannelSchema = new Schema<IChannel>(
    
     type: { type: String, enum: ["group", "private"], default: "private", required: true },
     participants: [{ type: Schema.Types.UUID, ref: "User", required: true }],
+    status: { type: String, enum: ["active", "archived"], default: "active" },
     groupInfo: {
       groupName: { type: String, required: false },
       groupDescription: { type: String, required: false },
@@ -57,4 +59,5 @@ ChannelSchema.pre<IChannel>("save", async function (next) {
   next();
 });
 
+ChannelSchema.index({ participants: 1});
 export const ChannelModel = model<IChannel>("Channel", ChannelSchema);

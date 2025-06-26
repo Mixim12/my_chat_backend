@@ -22,5 +22,7 @@ const UserSchema = new Schema<IUser>(
   },
   { timestamps: true }
 );
+UserSchema.index({ userUUID: 1, createdAt: 1 });
+UserSchema.index({ discoveryCode: 1, createdAt: 1 });
 
 export const UserModel = model<IUser>("User", UserSchema);

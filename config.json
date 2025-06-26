@@ -2,16 +2,16 @@
   "server": { "port": "${PORT}" },
 
   "cors": {
-    "origins": "${CORS_ORIGINS}"
+    "origins": "http://localhost:5173"
   },
 
   "mongo": { "mongoURI": "${MONGO_URI}" },
 
-  "amqp": {
-    "rabbitURL": "${RABBIT_URL}",
-    "queueName": "${QUEUE_NAME}",
-    "exchangeName": "${EXCHANGE_NAME}",
-    "exchangeType": "${EXCHANGE_TYPE}"
+  "rabbitmq": {
+    "url": "${RABBITMQ_URL}",
+    "queueName": "${RABBITMQ_QUEUE}",
+    "exchangeName": "${RABBITMQ_EXCHANGE}",
+    "exchangeType": "${RABBITMQ_EXCHANGE_TYPE}"
   },
 
   "proofOfWork": {

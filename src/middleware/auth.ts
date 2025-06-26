@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { verifyJwt } from '../utils/jwt';
 import { getCookie, deleteCookie } from 'hono/cookie';
 import { UserModel } from '../models/userModel';
+import { HTTP_STATUS } from '../utils/httpStatusCodes';
 
 export const authMiddleware = async (ctx: Context, next: () => Promise<void>) => {
   try {
@@ -43,6 +44,7 @@ export const authMiddleware = async (ctx: Context, next: () => Promise<void>) =>
 
     // User is authenticated - set context
     ctx.set('isAuthenticated', true);
+    ctx.set('userUUID', user.userUUID);
     ctx.set('user', user);
     
     await next();
@@ -55,3 +57,4 @@ export const authMiddleware = async (ctx: Context, next: () => Promise<void>) =>
     await next();
   }
 };
+
