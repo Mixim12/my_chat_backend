@@ -1,0 +1,24 @@
+apiVersion: 1
+
+providers:
+  - name: 'RabbitMQ'
+    orgId: 1
+    folder: 'RabbitMQ'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
+  
+  - name: 'Backend'
+    orgId: 1
+    folder: 'Backend'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false 

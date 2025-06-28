@@ -4,7 +4,7 @@ import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
 import { secureHeaders } from "hono/secure-headers";
 
-import { registerMetrics, printMetrics } from "./middleware/metrics";
+import { registerMetrics, printMetrics, updateMemoryMetrics, apiLatency } from "./middleware/metrics";
 
 import authRouter from "./routes/authRoutes";
 import userRouter from "./routes/userRoutes";
@@ -17,12 +17,17 @@ import config from "./utils/config";
 import { createSocketIOServer, startSocketIOServer } from "./websocket/socketIOServer";
 import { createLogger } from "./utils/logger";
 
-
+// Create logger
+const log = createLogger("App");
 
 // Connect to MongoDB
 connectDB(config.mongo.mongoURI)
-  .then(() => console.log("[MongoDB] Connected to MongoDB"))
-  .catch((err) => console.error("[MongoDB] Connection error:", err));
+  .then(() => {
+    log.info('[MongoDB] Connected to MongoDB');
+  })
+  .catch((error) => {
+    log.error('[MongoDB] Error connecting to MongoDB:', error);
+  });
 
 // Create Hono app
 const app = new Hono().basePath("/api");
@@ -43,6 +48,23 @@ app.use("*", cors({
 // Register Prometheus metrics middleware
 app.use("*", registerMetrics);
 
+// API latency middleware
+app.use("*", async (c, next) => {
+  const startTime = Date.now();
+  await next();
+  const endTime = Date.now();
+  const latency = (endTime - startTime) / 1000; // Convert to seconds
+  
+  apiLatency.observe(
+    { 
+      method: c.req.method, 
+      path: c.req.path.split("/").slice(0, 3).join("/"), // Normalize path
+      status: c.res.status.toString()
+    }, 
+    latency
+  );
+});
+
 // Register routes
 app.route("", authRouter);
 app.route("", userRouter);
@@ -52,7 +74,11 @@ app.route("", powRouter);
 
 // Health check endpoint
 app.get("/health", (c) => {
-  return c.json({ status: "ok", timestamp: new Date().toISOString() });
+  return c.json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // Metrics endpoint
@@ -60,10 +86,22 @@ app.get("/metrics", printMetrics);
 
 // Create and start Socket.IO server
 const io = createSocketIOServer();
-startSocketIOServer(io, 3001);
+startSocketIOServer(io, config.server.socketIoPort)
+.then(() => {
+  log.info(`[Socket.IO] Server running on http://localhost:${config.server.socketIoPort}`);
+})
+.catch((error) => {
+  log.error('[Socket.IO] Error starting Socket.IO server:', error);
+});
 
 // Start Hono server
-console.log(`[Hono] Server running on http://localhost:${config.server.port}`);
+log.info(`Server running on http://localhost:${config.server.port}`);
+
+// Update memory metrics every 30 seconds
+setInterval(() => {
+  updateMemoryMetrics();
+}, 30000);
+
 export default {
   port: config.server.port,
   fetch: app.fetch,

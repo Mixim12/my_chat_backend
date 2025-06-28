@@ -1,0 +1,47 @@
+groups:
+  - name: mychat_alerts
+    rules:
+      - alert: HighApiLatency
+        expr: histogram_quantile(0.95, sum(rate(api_latency_seconds_bucket[5m])) by (method, path, le)) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency detected"
+          description: "API endpoint {{ $labels.method }} {{ $labels.path }} has p95 latency above 200ms (current value: {{ $value }}s)"
+
+      - alert: HighMemoryUsage
+        expr: memory_usage_bytes{type="heapUsed"} / memory_usage_bytes{type="heapTotal"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 80% (current value: {{ $value | humanizePercentage }})"
+
+      - alert: WebSocketConnectionDrop
+        expr: (active_connections - active_connections offset 5m) / active_connections offset 5m < -0.5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "WebSocket connection drop detected"
+          description: "WebSocket connections have dropped by more than 50% in the last 5 minutes"
+
+      - alert: MessageProcessingLatency
+        expr: histogram_quantile(0.95, sum(rate(message_processing_time_seconds_bucket{operation="process"}[5m])) by (le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High message processing latency"
+          description: "Message processing time is above 500ms (current value: {{ $value }}s)"
+
+      - alert: DatabaseLatency
+        expr: histogram_quantile(0.95, sum(rate(message_processing_time_seconds_bucket{operation="db_store"}[5m])) by (le)) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database operation latency"
+          description: "Database operations taking more than 100ms (current value: {{ $value }}s)" 

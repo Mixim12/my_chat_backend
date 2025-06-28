@@ -10,12 +10,22 @@ A secure chat application backend built with Hono, Bun, and MongoDB, featuring e
 - **Trust Verification**: Infrastructure for safety number verification
 - **Metadata Protection**: Minimal server state with TTL indexes
 
+## 📊 Monitoring & Observability
+
+- **Prometheus Metrics**: Real-time performance and health metrics
+- **Grafana Dashboards**: Visual monitoring of application metrics
+- **Custom Metrics**: Message throughput, API latency, and connection tracking
+- **Bun Runtime Metrics**: Memory usage and performance metrics
+- **Alerting**: Configurable alerts for critical system conditions
+
 ## 🏗️ Architecture
 
 ```
 Frontend (Svelte) ↔ Backend (Hono/Bun) ↔ Database (MongoDB)
                            ↕
                     RabbitMQ (Real-time)
+                           ↕
+                 Prometheus ↔ Grafana
 ```
 
 ## 📋 Current Implementation Status
@@ -27,6 +37,9 @@ Frontend (Svelte) ↔ Backend (Hono/Bun) ↔ Database (MongoDB)
 - Session establishment framework
 - Message encryption/decryption service
 - Integration with existing chat flow
+- Prometheus metrics collection
+- Grafana dashboard visualization
+- Bun runtime metrics exposure
 
 ### ⚠️ In Progress
 - Full Signal Protocol integration (simplified implementation)
@@ -155,6 +168,8 @@ src/
 ├── controllers/
 │   ├── e2eeController.ts    # E2EE API endpoints
 │   └── messageController.ts # Message handling
+├── middleware/
+│   └── metrics.ts           # Prometheus metrics collection
 ├── routes/
 │   ├── e2eeRoutes.ts       # E2EE routes
 │   └── messageRoutes.ts    # Message routes
@@ -251,6 +266,38 @@ MIT License - see [LICENSE](./LICENSE) for details
 - [libsignal-client](https://github.com/signalapp/libsignal)
 - [Hono Framework](https://hono.dev/)
 - [Bun Runtime](https://bun.sh/)
+
+## 📊 Monitoring
+
+### Accessing Metrics
+
+```bash
+# Raw Prometheus metrics
+curl http://localhost:3000/api/metrics
+
+# Prometheus UI
+http://localhost:9090
+
+# Grafana dashboard
+http://localhost:3001
+# Default login: admin/admin
+```
+
+### Available Metrics
+
+- Message throughput and processing time
+- API endpoint latency
+- WebSocket connection counts
+- Memory usage (including Bun-specific metrics)
+- Channel member counts
+
+### Setting Up Grafana Dashboard
+
+1. Log in to Grafana at http://localhost:3001
+2. Go to "Dashboards" > "Import"
+3. Upload the provided dashboard JSON from `src/utils/grafana-dashboard.json`
+
+For more details, see [MONITORING.md](./MONITORING.md)
 
 ---
 

@@ -3,6 +3,7 @@ import { verify } from 'jsonwebtoken';
 import messageFlowHandler from '../services/messageFlowHandler';
 import config from '../utils/config';
 import { createLogger } from '../utils/logger';
+import { activeConnections, messagesSent, messagesReceived, messageProcessingTime } from '../middleware/metrics';
 
 const logger = createLogger('WebSocket:Server');
 
@@ -81,6 +82,9 @@ export function initSocketServer(socketIo: Server): void {
   io.on('connection', (socket) => {
     logger.info(`User connected: ${socket.data.userId} (${socket.data.username})`);
     
+    // Increment active connections metric
+    activeConnections.inc();
+    
     // Join channel handler
     socket.on('joinChannel', async (channelId, callback) => {
       try {
@@ -125,6 +129,9 @@ export function initSocketServer(socketIo: Server): void {
           return;
         }
         
+        // Start timing for message processing
+        const startTime = performance.now();
+        
         // Use the message flow handler for processing
         const processedMessage = await messageFlowHandler.processIncomingMessage({
           channelId: data.channelId,
@@ -132,6 +139,16 @@ export function initSocketServer(socketIo: Server): void {
           content: data.content,
           messageUUID: data.messageUUID,
           encryptedContent: data.encryptedContent !== false // Default to true
+        });
+        
+        // Calculate processing time and record metric
+        const processingTime = (performance.now() - startTime) / 1000; // Convert to seconds
+        messageProcessingTime.observe({ operation: 'send' }, processingTime);
+        
+        // Increment messages sent counter
+        messagesSent.inc({
+          channel_id: data.channelId,
+          encrypted: data.encryptedContent !== false ? 'true' : 'false'
         });
         
         logger.debug(`User ${socket.data.userId} sent message to channel ${data.channelId}`, {
@@ -255,6 +272,9 @@ export function initSocketServer(socketIo: Server): void {
       logger.info(`User disconnected: ${socket.data.userId} (${socket.data.username})`);
       
       try {
+        // Decrement active connections metric
+        activeConnections.dec();
+        
         // Update user status to offline
         socket.broadcast.emit('userStatus', {
           userId: socket.data.userId,

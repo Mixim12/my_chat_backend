@@ -3,6 +3,7 @@ import { getIO } from '../websocket/socketServer';
 import { MessageModel, IMessage } from '../models/messageModel';
 import { ChannelModel, IChannel } from '../models/channelModel';
 import { UserModel } from '../models/userModel';
+import { messagesSent, messagesReceived, messageProcessingTime, channelMembers } from '../middleware/metrics';
 
 const logger = createLogger('MessageFlow:Handler');
 
@@ -45,10 +46,32 @@ class MessageFlowHandler {
     try {
       // No RabbitMQ initialization needed - using Socket.IO adapter
       this.initialized = true;
+      
+      // Initialize channel metrics
+      await this.initializeChannelMetrics();
+      
       logger.info('Message flow handler initialized successfully');
     } catch (error) {
       logger.error('Failed to initialize message flow handler:', error);
       throw error;
+    }
+  }
+  
+  /**
+   * Initialize channel metrics by loading current channel member counts
+   */
+  private async initializeChannelMetrics(): Promise<void> {
+    try {
+      const channels = await ChannelModel.find({});
+      
+      for (const channel of channels) {
+        channelMembers.set({ channel_id: channel._id.toString() }, channel.participants.length);
+      }
+      
+      logger.debug(`Initialized metrics for ${channels.length} channels`);
+    } catch (error) {
+      logger.warn('Failed to initialize channel metrics:', error);
+      // Non-critical error, don't throw
     }
   }
 
@@ -57,6 +80,8 @@ class MessageFlowHandler {
    * This is the main entry point for the message flow
    */
   async processIncomingMessage(message: IncomingMessage): Promise<ProcessedMessage> {
+    const startTime = performance.now();
+    
     try {
       logger.debug('Processing incoming message', { 
         channelId: message.channelId, 
@@ -91,11 +116,22 @@ class MessageFlowHandler {
       // Update status to delivered
       processedMessage.status = 'delivered';
       
+      // Increment messages received counter (successfully processed)
+      messagesReceived.inc({ channel_id: message.channelId });
+      
+      // Record processing time
+      const processingTime = (performance.now() - startTime) / 1000; // Convert to seconds
+      messageProcessingTime.observe({ operation: 'process' }, processingTime);
+      
       logger.debug('Message processed successfully', { messageUUID });
       return processedMessage;
 
     } catch (error) {
       logger.error('Failed to process incoming message:', error);
+      
+      // Record processing time for failed messages too
+      const processingTime = (performance.now() - startTime) / 1000;
+      messageProcessingTime.observe({ operation: 'process_failed' }, processingTime);
       
       // Create failed message object for error handling
       const failedMessage: ProcessedMessage = {
@@ -124,41 +160,56 @@ class MessageFlowHandler {
    * Validate incoming message
    */
   private async validateMessage(message: IncomingMessage): Promise<void> {
-    // Check required fields
-    if (!message.channelId || !message.senderId || !message.content) {
-      throw new Error('Missing required message fields');
-    }
-
-    // Validate channel exists and user is a member
-    const channel = await ChannelModel.findById(message.channelId);
-    if (!channel) {
-      throw new Error(`Channel ${message.channelId} not found`);
-    }
-
-    // Check if user is a participant in the channel
-    // Convert senderId to string for comparison since participants array contains strings
-    const senderIdStr = message.senderId.toString();
-    const participantStrings = channel.participants.map(p => p.toString());
+    const startTime = performance.now();
     
-    if (!participantStrings.includes(senderIdStr)) {
-      throw new Error(`User ${message.senderId} is not a member of channel ${message.channelId}`);
-    }
+    try {
+      // Check required fields
+      if (!message.channelId || !message.senderId || !message.content) {
+        throw new Error('Missing required message fields');
+      }
 
-    // Validate content length (prevent spam)
-    if (message.content.length > 4096) { // 4KB limit
-      throw new Error('Message content too long');
-    }
+      // Validate channel exists and user is a member
+      const channel = await ChannelModel.findById(message.channelId);
+      if (!channel) {
+        throw new Error(`Channel ${message.channelId} not found`);
+      }
 
-    logger.debug('Message validation passed', { 
-      channelId: message.channelId, 
-      senderId: message.senderId 
-    });
+      // Check if user is a participant in the channel
+      // Convert senderId to string for comparison since participants array contains strings
+      const senderIdStr = message.senderId.toString();
+      const participantStrings = channel.participants.map(p => p.toString());
+      
+      if (!participantStrings.includes(senderIdStr)) {
+        throw new Error(`User ${message.senderId} is not a member of channel ${message.channelId}`);
+      }
+
+      // Validate content length (prevent spam)
+      if (message.content.length > 4096) { // 4KB limit
+        throw new Error('Message content too long');
+      }
+
+      logger.debug('Message validation passed', { 
+        channelId: message.channelId, 
+        senderId: message.senderId 
+      });
+      
+      // Record validation time
+      const validationTime = (performance.now() - startTime) / 1000;
+      messageProcessingTime.observe({ operation: 'validate' }, validationTime);
+    } catch (error) {
+      // Record validation time for failures too
+      const validationTime = (performance.now() - startTime) / 1000;
+      messageProcessingTime.observe({ operation: 'validate_failed' }, validationTime);
+      throw error;
+    }
   }
 
   /**
    * Store message in MongoDB
    */
   private async storeInDatabase(message: ProcessedMessage): Promise<void> {
+    const startTime = performance.now();
+    
     try {
       const messageDoc = await MessageModel.create({
         messageUUID: message.messageUUID,
@@ -175,8 +226,16 @@ class MessageFlowHandler {
         messageUUID: message.messageUUID,
         documentId: messageDoc._id 
       });
+      
+      // Record database storage time
+      const dbTime = (performance.now() - startTime) / 1000;
+      messageProcessingTime.observe({ operation: 'db_store' }, dbTime);
 
     } catch (error) {
+      // Record database failure time
+      const dbTime = (performance.now() - startTime) / 1000;
+      messageProcessingTime.observe({ operation: 'db_store_failed' }, dbTime);
+      
       logger.error('Failed to store message in database:', error);
       throw new Error(`Database storage failed: ${error}`);
     }
@@ -186,6 +245,8 @@ class MessageFlowHandler {
    * Broadcast message to channel subscribers via WebSocket
    */
   private async broadcastToChannel(message: ProcessedMessage): Promise<void> {
+    const startTime = performance.now();
+    
     try {
       const io = getIO();
       const channelRoom = `channel:${message.channelId}`;
@@ -204,14 +265,28 @@ class MessageFlowHandler {
 
       // Broadcast to all clients in the channel room
       io.to(channelRoom).emit('message', broadcastMessage);
+      
+      // Increment messages sent counter for broadcasting
+      messagesSent.inc({
+        channel_id: message.channelId,
+        encrypted: message.encryptedContent ? 'true' : 'false'
+      });
 
       logger.debug('Message broadcast to channel', { 
         messageUUID: message.messageUUID,
         channelRoom,
         channelId: message.channelId 
       });
+      
+      // Record broadcast time
+      const broadcastTime = (performance.now() - startTime) / 1000;
+      messageProcessingTime.observe({ operation: 'broadcast' }, broadcastTime);
 
     } catch (error) {
+      // Record broadcast failure time
+      const broadcastTime = (performance.now() - startTime) / 1000;
+      messageProcessingTime.observe({ operation: 'broadcast_failed' }, broadcastTime);
+      
       logger.error('Failed to broadcast message:', error);
       throw new Error(`Broadcast failed: ${error}`);
     }
@@ -251,6 +326,8 @@ class MessageFlowHandler {
     status: 'delivered' | 'read', 
     userId: string
   ): Promise<void> {
+    const startTime = performance.now();
+    
     try {
       // Update in database
       await MessageModel.updateOne(
@@ -279,8 +356,16 @@ class MessageFlowHandler {
         status, 
         userId 
       });
+      
+      // Record status update time
+      const updateTime = (performance.now() - startTime) / 1000;
+      messageProcessingTime.observe({ operation: 'status_update' }, updateTime);
 
     } catch (error) {
+      // Record status update failure time
+      const updateTime = (performance.now() - startTime) / 1000;
+      messageProcessingTime.observe({ operation: 'status_update_failed' }, updateTime);
+      
       logger.error('Failed to update message status:', error);
       throw error;
     }

@@ -9,7 +9,7 @@ import { ChannelModel } from '../models/channelModel';
 
 // Zod schema for message creation
 const sendMessageSchema = z.object({
-  channelId: z.string().uuid(),
+  channelId: z.string(),  // Accept any string format for MongoDB ObjectId
   content: z.string().min(1),
   encryptedContent: z.boolean().default(true),
 });
@@ -177,28 +177,31 @@ export async function getMessages(ctx: Context): Promise<Response> {
     const formattedMessages = messages.map(msg => {
       const senderInfo = senderMap.get(msg.senderUUID) || { username: 'Unknown', userUUID: msg.senderUUID };
       return {
-        messageId: msg.messageUUID,
-        sender: senderInfo,
-        ciphertext: msg.ciphertext.toString('base64'), // Base64 encode for transmission
+        id: msg.messageUUID,
+        messageUUID: msg.messageUUID,
+        senderUUID: msg.senderUUID,
+        channelId: channelId,
+        plaintext: msg.ciphertext.toString('base64'), // Frontend expects 'plaintext' field
+        messageType: 'encrypted',
+        encrypted: true,
+        deviceId: 1,
         status: msg.status,
-        timestamp: msg.createdAt,
+        createdAt: msg.createdAt,
+        updatedAt: msg.updatedAt || msg.createdAt
       };
     });
     
-    // Get pagination cursors
+    // Get pagination info
     const hasMore = messages.length === limit;
-    const nextCursor = hasMore ? messages[messages.length - 1].messageUUID : null;
-    const prevCursor = messages.length > 0 ? messages[0].messageUUID : null;
+    const count = formattedMessages.length;
     
     return ctx.json({
       success: true,
       data: {
         messages: formattedMessages,
-        pagination: {
-          hasMore,
-          nextCursor,
-          prevCursor,
-        }
+        count: count,
+        hasMore: hasMore,
+        encrypted: true
       }
     });
     

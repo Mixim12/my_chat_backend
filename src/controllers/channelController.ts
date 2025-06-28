@@ -14,7 +14,7 @@ const createChannelSchema = z.object({
   participantsDiscoveryCodes: z.array(z.string()).optional(),
   groupName: z.string().optional(),
   groupDescription: z.string().optional(),
-  recipientUUID: z.string().uuid().optional(), // For direct channels with UUID
+  recipientUUID: z.string().optional(), // For direct channels with UUID
   recipientDiscoveryCode: z.string().optional() // For direct channels with discovery code
 });
 

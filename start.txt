@@ -1,3 +1,3 @@
-systemctl start rabbitmq-server mongod docker
+systemctl start mongod docker
 
 sudo cp prometheus.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable prometheus && sudo systemctl start prometheus

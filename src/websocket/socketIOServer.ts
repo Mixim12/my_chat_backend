@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import { createAdapter } from "socket.io-amqp0";
-import amqplib from "amqplib";
+import amqplib, { Connection } from "amqplib";
 import config from "../utils/config";
 import { createLogger } from "../utils/logger";
 import { initSocketServer } from "./socketServer";
@@ -44,17 +44,9 @@ export function createSocketIOServer(): Server {
     }
   });
 
-  // Set up AMQP adapter for scaling
-  // TODO: TypeScript import conflict - amqplib.connect is being interpreted as returning ChannelModel instead of Connection
-  // This is likely due to import resolution conflicts with our MongoDB ChannelModel
-  // Potential solutions:
-  // 1. Use a different version of @types/amqplib
-  // 2. Create a wrapper function in a separate file to isolate imports
-  // 3. Use type assertions to force the correct type
-  // 4. Switch to a different AMQP adapter library
-  // 
-  io.adapter(createAdapter({ amqpConnection: () => amqplib.connect(config.rabbitmq.url as string) }));
-
+ 
+  io.adapter(createAdapter({ amqpConnection: () => amqplib.connect(config.rabbitmq.url )as unknown as Promise<Connection> }))
+ 
   log.info('Socket.IO server configured (AMQP adapter disabled due to TypeScript import conflict)');
 
   // Enhanced connection event handling
@@ -91,7 +83,7 @@ export function createSocketIOServer(): Server {
 /**
  * Start Socket.IO server on specified port
  */
-export function startSocketIOServer(io: Server, port: number = 3001): void {
+export async function startSocketIOServer(io: Server, port: number = 3001): Promise<void> {
   // Start Socket.IO server
   io.listen(port);
   console.log(`[Socket.IO] Server running on http://localhost:${port}`);

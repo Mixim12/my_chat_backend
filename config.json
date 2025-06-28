@@ -1,5 +1,8 @@
 {
-  "server": { "port": "${PORT}" },
+  "server": {
+    "port": "${PORT}",
+    "socketIoPort": "${SOCKET_IO_PORT}"
+  },
 
   "cors": {
     "origins": "http://localhost:5173"
@@ -8,10 +11,7 @@
   "mongo": { "mongoURI": "${MONGO_URI}" },
 
   "rabbitmq": {
-    "url": "${RABBITMQ_URL}",
-    "queueName": "${RABBITMQ_QUEUE}",
-    "exchangeName": "${RABBITMQ_EXCHANGE}",
-    "exchangeType": "${RABBITMQ_EXCHANGE_TYPE}"
+    "url": "${RABBITMQ_URL}"
   },
 
   "proofOfWork": {
