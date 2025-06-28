@@ -175,12 +175,38 @@ class MessageFlowHandler {
       }
 
       // Check if user is a participant in the channel
-      // Convert senderId to string for comparison since participants array contains strings
+      // Since we're now using userUUID as the senderId, we need to find the user in the participants
+      // First, check if the senderId is a valid UUID format
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const isUUID = uuidPattern.test(message.senderId);
+      
+      // For UUID-based identification, we need to check against the userUUID field
+      if (isUUID) {
+        // Find the user in the channel participants
+        const user = await UserModel.findOne({ userUUID: message.senderId });
+        if (!user) {
+          throw new Error(`User with UUID ${message.senderId} not found`);
+        }
+        
+        // Check if the user is a participant in the channel
+        const isParticipant = channel.participants.some(participantId => {
+          // Convert both to strings for comparison
+          const participantIdStr = participantId.toString();
+          const userIdStr = user._id ? user._id.toString() : '';
+          return participantIdStr === userIdStr || participantIdStr === message.senderId;
+        });
+        
+        if (!isParticipant) {
+          throw new Error(`User ${message.senderId} is not a member of channel ${message.channelId}`);
+        }
+      } else {
+        // Fallback for legacy random IDs (temporary during migration)
       const senderIdStr = message.senderId.toString();
       const participantStrings = channel.participants.map(p => p.toString());
       
       if (!participantStrings.includes(senderIdStr)) {
         throw new Error(`User ${message.senderId} is not a member of channel ${message.channelId}`);
+        }
       }
 
       // Validate content length (prevent spam)
@@ -301,7 +327,17 @@ class MessageFlowHandler {
       
       // Find the sender's socket connection
       const sockets = await io.fetchSockets();
-      const senderSocket = sockets.find(socket => socket.data.userId === message.senderId);
+      
+      // Check all sockets for a matching userId (which is now the userUUID)
+      const senderSocket = sockets.find(socket => {
+        // Direct match with UUID
+        if (socket.data.userId === message.senderId) {
+          return true;
+        }
+        
+        // No match found
+        return false;
+      });
 
       if (senderSocket) {
         senderSocket.emit('error', `Message failed: ${error.message}`);

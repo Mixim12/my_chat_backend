@@ -58,19 +58,26 @@ export function initSocketServer(socketIo: Server): void {
     logger.error('Failed to initialize message flow handler:', error);
   });
 
-  // Simple middleware that assigns a default user ID without authentication
-  // This is a temporary solution to bypass authentication requirements
+  // Middleware that uses the provided userUUID for identification
+  // This allows consistent user identification across the application
   io.use((socket, next) => {
     try {
-      // Generate a random user ID for this connection
-      const randomUserId = `user-${Math.floor(Math.random() * 10000)}`;
+      // Get userUUID from the handshake query
+      const userUUID = socket.handshake.query.userUUID as string;
+      const username = socket.handshake.query.username as string;
       
-      // Set default user data on socket
-      socket.data.userId = randomUserId;
-      socket.data.username = `User-${randomUserId.substring(5)}`;
+      if (!userUUID) {
+        logger.error('Missing userUUID in socket connection');
+        next(new Error('Authentication failed: Missing userUUID'));
+        return;
+      }
+      
+      // Set user data on socket
+      socket.data.userId = userUUID;
+      socket.data.username = username || `User-${userUUID.substring(0, 5)}`;
       socket.data.channels = new Set();
       
-      logger.debug(`Assigned default user ID: ${socket.data.userId} (${socket.data.username})`);
+      logger.debug(`Authenticated user: ${socket.data.userId} (${socket.data.username})`);
       next();
     } catch (error) {
       logger.error('Socket middleware error:', error);

@@ -15,14 +15,7 @@ import { Jwt } from "virgil-sdk";
 const cookieOptions: CookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "strict",
-  maxAge: 24 * 60 * 60, // 1 day - single token approach
-};
-
-const cookieOptionsVirgil: CookieOptions = {
-  httpOnly: false,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax",
+  sameSite: "Strict",
   maxAge: 24 * 60 * 60, // 1 day - single token approach
 };
 
@@ -70,10 +63,10 @@ function generateToken(userUUID: string): string | null {
   return signJwt({ userUUID }, "24h"); // Single token with 24h expiry
 }
 
-async function generateVirgilToken(userUUID: string): Promise<Jwt> {
+async function generateVirgilToken(username: string): Promise<Jwt> {
   try{
     const jwtGenerator = await getJwtGenerator();
-    const token = await jwtGenerator.generateToken(userUUID);
+    const token = await jwtGenerator.generateToken(username);
     return token;
   }catch(error){
     console.error("Error generating Virgil token:", error);
@@ -118,7 +111,7 @@ export async function register(ctx: Context): Promise<Response> {
 
     setAuthToken(ctx, accessToken);
 
-    const virgilToken = await generateVirgilToken(user.userUUID.toString());
+    const virgilToken = await generateVirgilToken(user.username);
     if (!virgilToken) {
       return ctx.json({ status: "Virgil token generation failed" }, HTTP_STATUS.SERVER_ERROR);
     }
@@ -172,7 +165,7 @@ export async function login(ctx: Context): Promise<Response> {
 
     setAuthToken(ctx, accessToken);
 
-    const virgilToken = await generateVirgilToken(user.userUUID.toString());
+    const virgilToken = await generateVirgilToken(user.username);
     if (!virgilToken) {
       return ctx.json({ status: "Virgil token generation failed" }, HTTP_STATUS.SERVER_ERROR);
     }

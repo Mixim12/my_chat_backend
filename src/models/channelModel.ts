@@ -45,6 +45,11 @@ ChannelSchema.pre<IChannel>("save", async function (next) {
     const error = validationRules.find((rule) => rule.condition);
     if (error) return next(new Error(error.message));
   } else if (this.type === "private") {
+    // Private channels should not have groupInfo
+    if (this.groupInfo) {
+      this.groupInfo = undefined;
+    }
+    
     // Check if a private channel with these participants already exists
     const existingChannel = await ChannelModel.findOne({
       type: "private",
