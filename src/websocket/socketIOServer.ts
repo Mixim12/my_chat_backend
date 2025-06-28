@@ -51,16 +51,16 @@ export function createSocketIOServer(): Server {
 
   // Enhanced connection event handling
   io.on('connection', (socket) => {
-    console.log(`[Socket.IO] Client connected: ${socket.id} from ${socket.handshake.address}`);
+    console.log(`[Socket.IO] Client connected to socket: ${socket.id} from  ${socket.handshake.address}`);
     
     // Track connection metrics
     socket.on('disconnect', (reason) => {
-      console.log(`[Socket.IO] Client disconnected: ${socket.id}, reason: ${reason}`);
+      console.log(`[Socket.IO] Client disconnected from socket: ${socket.id}, reason: ${reason}`);
     });
     
     // Handle connection errors
     socket.on('error', (error) => {
-      console.error(`[Socket.IO] Socket error for ${socket.id}:`, error);
+      console.error(`[Socket.IO] Socket error for socket: ${socket.id}:`, error);
     });
     
     // Handle ping/pong for connection monitoring

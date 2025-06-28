@@ -18,11 +18,7 @@ const MessageSchema = new Schema<IMessage>({
   messageUUID: { type: Schema.Types.UUID, required: true, unique: true, index: true },
   senderUUID: { type: Schema.Types.UUID, required: true, index: true },
   channelId: { type: Schema.Types.ObjectId, ref: 'Channel', required: true, index: true },
-  sessionId: { type: Schema.Types.ObjectId, ref: 'Session', index: true },
   ciphertext: { type: Buffer, required: true }, // Always encrypted
-  messageType: { type: Number }, // Signal Protocol message type
-  registrationId: { type: Number }, // For verification
-  deviceId: { type: Number, default: 1 }, // Multi-device support
   status: { 
     type: String, 
     enum: ['sent', 'delivered', 'read', 'failed'], 
