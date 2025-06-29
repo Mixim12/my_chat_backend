@@ -9,7 +9,7 @@ export interface IChannel extends Document {
   groupInfo?: {
     groupName: string;
     groupDescription: string;
-    groupAdmins: Types.UUID[];
+    groupAdmin: Types.UUID;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -24,7 +24,7 @@ const ChannelSchema = new Schema<IChannel>(
     groupInfo: {
       groupName: { type: String, required: false },
       groupDescription: { type: String, required: false },
-      groupAdmins: [{ type: Schema.Types.UUID, ref: "User", required: false }],
+      groupAdmin: { type: Schema.Types.UUID, ref: "User", required: false },
     },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },

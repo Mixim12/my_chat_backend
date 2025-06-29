@@ -12,6 +12,7 @@ import { getCookie } from "hono/cookie";
 const createChannelSchema = z.object({
   type: z.enum(["group", "private"]),
   participantsDiscoveryCodes: z.array(z.string()).optional(),
+  groupAdmin: z.string().optional(),
   groupName: z.string().optional(),
   groupDescription: z.string().optional(),
   recipientUUID: z.string().optional(), // For direct channels with UUID
@@ -85,7 +86,7 @@ export async function createChannel(ctx: Context) {
         }, 200);
       }
     } else if (validatedData.type === "group") {
-      if (!validatedData.groupName || !validatedData.groupDescription) {
+      if (!validatedData.groupName || !validatedData.groupDescription || !validatedData.groupAdmin) {
         return ctx.json({ error: "Group name and description are required" }, 400);
       }
 
@@ -106,7 +107,7 @@ export async function createChannel(ctx: Context) {
       channelData.groupInfo = {
         groupName: validatedData.groupName,
         groupDescription: validatedData.groupDescription,
-        groupAdmins: [userUUID as unknown as Schema.Types.UUID],
+        groupAdmin: validatedData.groupAdmin,
       };
     }
 
@@ -202,8 +203,7 @@ export async function getChannels(ctx: Context) {
             ciphertext: latestMessage.ciphertext,
             timestamp: latestMessage.createdAt,
             status: latestMessage.status,
-            // Note: We don't decrypt here for performance and security reasons
-            // The frontend will handle decryption when needed
+        
           };
         }
         
@@ -211,7 +211,7 @@ export async function getChannels(ctx: Context) {
           ...channel.toObject(),
           participants: validParticipants,
           lastMessage: latestMessageWithSender,
-          // Add a sortKey for proper ordering
+
           lastActivityTime: latestMessage ? latestMessage.createdAt : channel.createdAt
         };
       })
@@ -229,7 +229,6 @@ export async function getChannels(ctx: Context) {
       const { lastActivityTime, ...channelWithoutSortKey } = channel;
       return channelWithoutSortKey;
     });
-
     return ctx.json({ channels: finalChannels });
   } catch (error) {
     console.error("Error getting channels:", error);
@@ -313,9 +312,7 @@ export async function updateChannel(ctx: Context) {
     // For group channels, only admins can update
     if (channel.type === "group") {
       const userUUIDString = userUUID.toString();
-      const isAdmin = channel.groupInfo?.groupAdmins.some(
-        admin => admin.toString() === userUUIDString
-      );
+      const isAdmin = channel.groupInfo?.groupAdmin.toString() === userUUIDString;
       
       if (!isAdmin) {
         return ctx.json({ error: "Only admins can update the channel" }, 403);
@@ -398,7 +395,7 @@ export async function deleteChannel(ctx: Context) {
     // Only allow deletion of group channels by admins
     if (channel.type === "group") {
       const userUUIDString = userUUID.toString();
-      const isAdmin = channel.groupInfo?.groupAdmins.some(admin => admin.toString() === userUUIDString);
+      const isAdmin = channel.groupInfo?.groupAdmin.toString() === userUUIDString;
       
       if (!isAdmin) {
         return ctx.json({ error: "Only admins can delete the channel" }, 403);
@@ -442,9 +439,7 @@ export async function archiveChannel(ctx: Context) {
     // For group channels, only admins can archive
     if (channel.type === "group") {
       const userUUIDString = userUUID.toString();
-      const isAdmin = channel.groupInfo?.groupAdmins.some(
-        admin => admin.toString() === userUUIDString
-      );
+      const isAdmin = channel.groupInfo?.groupAdmin.toString() === userUUIDString;
       
       if (!isAdmin) {
         return ctx.json({ error: "Only admins can archive the channel" }, 403);
@@ -515,9 +510,7 @@ export async function addMemberToChannel(ctx: Context) {
     // Check if user is authorized to add members
     if (channel.type === "group") {
       // For group channels, check if the user is an admin
-      const isAdmin = channel.groupInfo?.groupAdmins.some(
-        admin => admin.toString() === userUUID.toString()
-      );
+      const isAdmin = channel.groupInfo?.groupAdmin.toString() === userUUID.toString();
 
       if (!isAdmin) {
         return ctx.json({ error: "Only group admins can add members" }, 403);
@@ -599,9 +592,7 @@ export async function removeMemberFromChannel(ctx: Context) {
     // Check authorization
     if (channel.type === "group") {
       // For group channels, check if the user is an admin or removing themselves
-      const isAdmin = channel.groupInfo?.groupAdmins.some(
-        admin => admin.toString() === userUUID.toString()
-      );
+      const isAdmin = channel.groupInfo?.groupAdmin.toString() === userUUID.toString();
       const isSelfRemoval = userUUID.toString() === memberId;
 
       if (!isAdmin && !isSelfRemoval) {
@@ -610,8 +601,7 @@ export async function removeMemberFromChannel(ctx: Context) {
 
       // Check if trying to remove the last admin
       if (isAdmin && memberId === userUUID.toString()) {
-        const adminCount = channel.groupInfo?.groupAdmins.length || 0;
-        if (adminCount <= 1) {
+        if (channel.groupInfo?.groupAdmin.toString() === memberId) {
           return ctx.json({ error: "Cannot remove the last admin from the group" }, 400);
         }
       }
@@ -629,9 +619,7 @@ export async function removeMemberFromChannel(ctx: Context) {
 
     // If it's a group channel and the member is an admin, remove from admins too
     if (channel.type === "group" && channel.groupInfo) {
-      channel.groupInfo.groupAdmins = channel.groupInfo.groupAdmins.filter(
-        admin => admin.toString() !== memberId
-      );
+        channel.groupInfo.groupAdmin = channel.groupInfo.groupAdmin.toString() !== memberId ? channel.groupInfo.groupAdmin : channel.groupInfo.groupAdmin;
     }
 
     // If no participants left, delete the channel
@@ -690,9 +678,7 @@ export async function promoteToAdmin(ctx: Context) {
     }
 
     // Check if the requesting user is an admin
-    const isAdmin = channel.groupInfo?.groupAdmins.some(
-      admin => admin.toString() === userUUID.toString()
-    );
+    const isAdmin = channel.groupInfo?.groupAdmin.toString() === userUUID.toString();
 
     if (!isAdmin) {
       return ctx.json({ error: "Only admins can promote members to admin" }, 403);
@@ -708,9 +694,7 @@ export async function promoteToAdmin(ctx: Context) {
     }
 
     // Check if the member is already an admin
-    const isAlreadyAdmin = channel.groupInfo?.groupAdmins.some(
-      admin => admin.toString() === memberId
-    );
+    const isAlreadyAdmin = channel.groupInfo?.groupAdmin.toString() === memberId;
 
     if (isAlreadyAdmin) {
       return ctx.json({ error: "User is already an admin" }, 400);
@@ -718,7 +702,7 @@ export async function promoteToAdmin(ctx: Context) {
 
     // Add the member to admins
     if (channel.groupInfo) {
-      channel.groupInfo.groupAdmins.push(memberId as any);
+      channel.groupInfo.groupAdmin = memberId as any;
     }
 
     // Save the updated channel
@@ -771,33 +755,27 @@ export async function demoteFromAdmin(ctx: Context) {
     }
 
     // Check if the requesting user is an admin
-    const isAdmin = channel.groupInfo?.groupAdmins.some(
-      admin => admin.toString() === userUUID.toString()
-    );
+    const isAdmin = channel.groupInfo?.groupAdmin.toString() === userUUID.toString();
 
     if (!isAdmin) {
       return ctx.json({ error: "Only admins can demote other admins" }, 403);
     }
 
     // Check if the target member is an admin
-    const isTargetAdmin = channel.groupInfo?.groupAdmins.some(
-      admin => admin.toString() === memberId
-    );
+    const isTargetAdmin = channel.groupInfo?.groupAdmin.toString() === memberId;
 
     if (!isTargetAdmin) {
       return ctx.json({ error: "User is not an admin" }, 400);
     }
 
     // Check if trying to demote the last admin
-    if (channel.groupInfo?.groupAdmins.length === 1) {
+    if (channel.groupInfo?.groupAdmin.toString() === memberId) {
       return ctx.json({ error: "Cannot demote the last admin of the group" }, 400);
     }
 
     // Remove the member from admins
     if (channel.groupInfo) {
-      channel.groupInfo.groupAdmins = channel.groupInfo.groupAdmins.filter(
-        admin => admin.toString() !== memberId
-      );
+      channel.groupInfo.groupAdmin = channel.groupInfo.groupAdmin.toString() !== memberId ? channel.groupInfo.groupAdmin : channel.groupInfo.groupAdmin;
     }
 
     // Save the updated channel
