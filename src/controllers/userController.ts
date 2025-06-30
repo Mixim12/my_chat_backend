@@ -5,12 +5,16 @@ import { decodeJwt } from "../utils/jwt";
 import { getCookie } from "hono/cookie";
 import { Types } from "mongoose";
 import { z } from "zod";
+import * as bcrypt from "bcrypt-ts";
 
 // Validation schemas
 const updateUserSchema = z.object({
   username: z.string().min(3).max(50).optional(),
   email: z.string().email().optional(),
-  status: z.enum(["online", "offline", "away", "busy"]).optional()
+  oldPassword: z.string().min(6).max(50).optional(),
+  newPassword: z.string().min(6).max(50).optional(), 
+  status: z.enum(["online", "offline", "away", "busy"]).optional(),
+  password: z.string().min(6).max(50).optional(),
 });
 
 export async function getAllUsersGroup(ctx: Context) {
@@ -89,16 +93,18 @@ export async function updateUser(ctx: Context) {
     const body = await ctx.req.json();
     const validatedData = updateUserSchema.parse(body);
 
-    // Check if username is already taken (if updating username)
-    if (validatedData.username) {
-      const existingUser = await UserModel.findOne({ 
-        username: validatedData.username,
-        userUUID: { $ne: userUUID }
-      });
-
-      if (existingUser) {
-        return ctx.json({ error: "Username already taken" }, 400);
+  
+    if(validatedData.newPassword && validatedData.oldPassword){
+      const user = await UserModel.findOne({ userUUID });
+      if(!user){
+        return ctx.json({ error: "User not found" }, 404);
       }
+      const isPasswordValid = await bcrypt.compare(validatedData.oldPassword, user.password);
+      if(!isPasswordValid){
+        return ctx.json({ error: "Invalid password" }, 400);
+      }
+      const hashedPassword = await bcrypt.hash(validatedData.newPassword, 10);
+      validatedData.password = hashedPassword;
     }
 
     // Check if email is already taken (if updating email)
@@ -178,3 +184,25 @@ export async function searchUsers(ctx: Context) {
     return ctx.json({ error: "Internal server error" }, 500);
   }
 }
+
+export async function deleteUser(ctx: Context) {
+  try {
+    const token = getCookie(ctx, "token");
+    if (!token) {
+      return ctx.json({ error: "Not authenticated" }, 401);
+    }
+    const payload = decodeJwt(token) as { userUUID: string };
+    const userUUID = new Types.UUID(payload.userUUID);
+
+    const user = await UserModel.findOne({ userUUID });
+    if(!user){
+      return ctx.json({ error: "User not found" }, 404);
+    }
+    await UserModel.deleteOne({ userUUID });
+    return ctx.json({ message: "User deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    return ctx.json({ error: "Internal server error" }, 500);
+  }
+}
+

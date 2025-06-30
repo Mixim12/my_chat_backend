@@ -25,3 +25,10 @@ scrape_configs:
       - targets: ["backend:3000"]
     scrape_interval: 5s
     scrape_timeout: 4s
+    
+  - job_name: "mychat-custom-metrics"
+    metrics_path: /api/custom-metrics
+    static_configs:
+      - targets: ["backend:3000"]
+    scrape_interval: 5s
+    scrape_timeout: 4s

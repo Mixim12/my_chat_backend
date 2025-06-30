@@ -4,7 +4,7 @@ import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
 import { secureHeaders } from "hono/secure-headers";
 
-import { registerMetrics, printMetrics, updateMemoryMetrics, apiLatency } from "./middleware/metrics";
+import { registerMetrics, printMetrics, printCustomMetrics, updateMemoryMetrics, apiLatency } from "./middleware/metrics";
 
 import authRouter from "./routes/authRoutes";
 import userRouter from "./routes/userRoutes";
@@ -32,7 +32,10 @@ connectDB(config.mongo.mongoURI)
 // Create Hono app
 const app = new Hono().basePath("/api");
 
-// Apply middlewares
+// Register Prometheus metrics middleware first
+app.use("*", registerMetrics);
+
+// Apply other middlewares
 app.use("*", logger());
 app.use("*", prettyJSON());
 app.use("*", secureHeaders());
@@ -44,9 +47,6 @@ app.use("*", cors({
   maxAge: 600,
   credentials: true,
 }));
-
-// Register Prometheus metrics middleware
-app.use("*", registerMetrics);
 
 // API latency middleware
 app.use("*", async (c, next) => {
@@ -81,8 +81,12 @@ app.get("/health", (c) => {
   });
 });
 
-// Metrics endpoint
+// Metrics endpoints
 app.get("/metrics", printMetrics);
+app.get("/custom-metrics", async (c) => {
+  const metrics = await printCustomMetrics();
+  return c.text(metrics);
+});
 
 // Create and start Socket.IO server
 const io = createSocketIOServer();

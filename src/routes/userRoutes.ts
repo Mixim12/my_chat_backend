@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getUserByDiscoveryCode, getCurrentUser, updateUser, searchUsers } from "../controllers/userController";
+import { getUserByDiscoveryCode, getCurrentUser, updateUser, searchUsers, deleteUser } from "../controllers/userController";
 import { authMiddleware } from "../middleware/auth";
 
 const userRouter = new Hono();
@@ -16,5 +16,8 @@ userRouter.put("/v1/users/me", authMiddleware, updateUser);
 
 // Search users
 userRouter.get("/v1/users/search/:query", authMiddleware, searchUsers);
+
+// Delete current user profile
+userRouter.delete("/v1/users/me", authMiddleware, deleteUser);
 
 export default userRouter;
